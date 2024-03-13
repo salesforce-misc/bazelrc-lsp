@@ -4,21 +4,38 @@ use chumsky::Parser;
 pub type Span = std::ops::Range<usize>;
 pub type Spanned<T> = (T, Span);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Token {
-    Token(String),
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-struct Line {
+pub struct Line {
     command: Option<Spanned<String>>,
     config: Option<Spanned<String>>,
-    tokens: Vec<Spanned<Token>>,
+    flags: Vec<Spanned<String>>,
     comment: Option<Spanned<String>>,
 }
 
-// See rc_file.cc and util/strings.cc
-pub fn tokenizer() -> impl Parser<char, Vec<Line>, Error = Simple<char>> {
+// Tokenizer and parser for bazelrc files.
+//
+// The syntax supported by bazelrc is primarily implementation-defined
+// and it seems to be a bit ad-hoc.
+//
+// As such, rather exotic lines like
+// > b"uil"d':o'pt --"x"='y'
+// are valid. In this case, the line is equivalent to
+// > build:opt --x=y
+//
+// For proper LSP support, we need to track the offsets inside
+// the orignal string though. Given that the interesting structural
+// parts (e.g., the `build` and `opt`) would be munged together
+// in a single token with a single source location range, I decided
+// against the classical split betwen tokenizer and parser.
+//
+// Instead, the tokenizer and parser are combined. We detect most
+// valid syntax, but for some more exotic syntax like
+// > b"uil"d':o'pt --"x"='y'
+// above, we will not be able to extract the correct location
+// information.
+//
+// See rc_file.cc and util/strings.cc from the Bazel source code
+pub fn parser() -> impl Parser<char, Vec<Line>, Error = Simple<char>> {
     // The token separators
     let specialchars = " \t\r\n\"\'#";
 
@@ -78,7 +95,7 @@ pub fn tokenizer() -> impl Parser<char, Vec<Line>, Error = Simple<char>> {
     // A list of flags
     let flags_list = mixed_token
         .clone()
-        .map_with_span(|v, span| (Token::Token(v), span))
+        .map_with_span(|v, span| (v, span))
         .separated_by(separator.clone())
         .allow_leading()
         .allow_trailing();
@@ -113,7 +130,7 @@ pub fn tokenizer() -> impl Parser<char, Vec<Line>, Error = Simple<char>> {
             Line {
                 command,
                 config: config.flatten(),
-                tokens,
+                flags: tokens,
                 comment,
             }
         });
@@ -127,13 +144,13 @@ pub fn tokenizer() -> impl Parser<char, Vec<Line>, Error = Simple<char>> {
 #[test]
 fn test_newlines() {
     // Our parser accepts empty strings
-    assert_eq!(tokenizer().parse(""), Ok(Vec::from([Line::default()])));
+    assert_eq!(parser().parse(""), Ok(Vec::from([Line::default()])));
 
     // `\n` and `\r\n``separate lines.
     // Lines can have leading and trailing whitespace.
     // We also preserve empty lines
     assert_eq!(
-        tokenizer().parse("cmd\n\r\n\ncmd -x \n"),
+        parser().parse("cmd\n\r\n\ncmd -x \n"),
         Ok(Vec::from([
             Line {
                 command: Some(("cmd".to_string(), 0..3)),
@@ -145,7 +162,7 @@ fn test_newlines() {
             // This line has content again
             Line {
                 command: Some(("cmd".to_string(), 7..10)),
-                tokens: Vec::from([(Token::Token("-x".to_string()), 11..13)]),
+                flags: Vec::from([("-x".to_string(), 11..13)]),
                 ..Default::default()
             },
             // The final newline is also preserved
@@ -158,7 +175,7 @@ fn test_newlines() {
 fn test_command_specifier() {
     // The first token is the command name
     assert_eq!(
-        tokenizer().parse("cmd"),
+        parser().parse("cmd"),
         Ok(Vec::from([Line {
             command: Some(("cmd".to_string(), 0..3)),
             ..Default::default()
@@ -167,7 +184,7 @@ fn test_command_specifier() {
 
     // The command name might be followed by `:config-name`
     assert_eq!(
-        tokenizer().parse("cmd:my-config"),
+        parser().parse("cmd:my-config"),
         Ok(Vec::from([Line {
             command: Some(("cmd".to_string(), 0..3)),
             config: Some(("my-config".to_string(), 3..13)),
@@ -177,7 +194,7 @@ fn test_command_specifier() {
 
     // The config might contain arbitrarily complex escaped tokens
     assert_eq!(
-        tokenizer().parse("cmd:my-\\ con'f ig'"),
+        parser().parse("cmd:my-\\ con'f ig'"),
         Ok(Vec::from([Line {
             command: Some(("cmd".to_string(), 0..3)),
             config: Some(("my- conf ig".to_string(), 3..18)),
@@ -185,14 +202,13 @@ fn test_command_specifier() {
         },]))
     );
 
-
     // The command combined with some actual arguments
     assert_eq!(
-        tokenizer().parse("build:opt --x=y"),
+        parser().parse("build:opt --x=y"),
         Ok(Vec::from([Line {
             command: Some(("build".to_string(), 0..5)),
             config: Some(("opt".to_string(), 5..9)),
-            tokens: Vec::from([(Token::Token("--x=y".to_string()), 10..15)]),
+            flags: Vec::from([("--x=y".to_string(), 10..15)]),
             ..Default::default()
         },]))
     );
@@ -201,99 +217,84 @@ fn test_command_specifier() {
 #[test]
 fn test_flag_parsing() {
     let flags_only = |e: &str| {
-        tokenizer().parse("command ".to_string() + e).map(|v| {
+        parser().parse("command ".to_string() + e).map(|v| {
             v.iter()
                 // Remove empty lines
-                .filter(|l| !l.tokens.is_empty() || l.comment.is_some())
+                .filter(|l| !l.flags.is_empty() || l.comment.is_some())
                 // Remove positions
-                .map(|v2| v2.tokens.iter().map(|e| e.0.clone()).collect::<Vec<_>>())
+                .map(|v2| v2.flags.iter().map(|e| e.0.clone()).collect::<Vec<_>>())
                 .collect::<Vec<_>>()
         })
     };
-    let single_line = |t: &[Token]| Ok(Vec::from([Vec::from(t)]));
-    let single_token = |t: Token| single_line(&[t]);
+    let single_line = |t: &[String]| Ok(Vec::from([Vec::from(t)]));
+    let single_token = |t: String| single_line(&[t]);
 
     macro_rules! assert_single_flag {
         ($a1:expr, $a2:expr) => {
-            assert_eq!(flags_only($a1), single_token($a2));
+            assert_eq!(flags_only($a1), single_token($a2.to_string()));
         };
     }
 
     // A simple token without escaped characters
-    assert_single_flag!("abc", Token::Token("abc".to_string()));
+    assert_single_flag!("abc", "abc");
     // Characters inside tokens can be escaped using `\`
-    assert_single_flag!("a\\bc\\d", Token::Token("abcd".to_string()));
+    assert_single_flag!("a\\bc\\d", "abcd");
     // A `\` is escaped using another `\`
-    assert_single_flag!("a\\\\b", Token::Token("a\\b".to_string()));
+    assert_single_flag!("a\\\\b", "a\\b");
     // A `\` can also be used to escape whitespaces or tabs
-    assert_single_flag!("a\\ b\\\tc", Token::Token("a b\tc".to_string()));
+    assert_single_flag!("a\\ b\\\tc", "a b\tc");
 
     // A token can contain be escaped using `"`
-    assert_single_flag!("\"a b\tc\"", Token::Token("a b\tc".to_string()));
+    assert_single_flag!("\"a b\tc\"", "a b\tc");
     // Instead of `"`, one can also use `'` to escape
-    assert_single_flag!("'a b\tc'", Token::Token("a b\tc".to_string()));
+    assert_single_flag!("'a b\tc'", "a b\tc");
     // Inside `"`, other `"` can be escaped. `'` can be included unescaped
-    assert_single_flag!("\"a\\\"b'c\"", Token::Token("a\"b'c".to_string()));
+    assert_single_flag!("\"a\\\"b'c\"", "a\"b'c");
     // Inside `'`, other `'` can be escaped. `"` can be included unescaped
-    assert_single_flag!("'a\"b\\'c'", Token::Token("a\"b'c".to_string()));
+    assert_single_flag!("'a\"b\\'c'", "a\"b'c");
 
     // Quoted parts can also appear in the middle of tokens
-    assert_single_flag!(
-        "abc' cd\t e\\''fg\"h i\"j",
-        Token::Token("abc cd\t e'fgh ij".to_string())
-    );
+    assert_single_flag!("abc' cd\t e\\''fg\"h i\"j", "abc cd\t e'fgh ij");
 
     // A whitespace seperates two tokens
     assert_eq!(
         flags_only("ab c"),
-        single_line(&[
-            Token::Token("ab".to_string()),
-            Token::Token("c".to_string())
-        ])
+        single_line(&["ab".to_string(), "c".to_string()])
     );
     // Instead of a whitespace, one can also use a tab
     assert_eq!(
         flags_only("ab\tc"),
-        single_line(&[
-            Token::Token("ab".to_string()),
-            Token::Token("c".to_string())
-        ])
+        single_line(&["ab".to_string(), "c".to_string()])
     );
     // Two tokens can also be separated by multiple whitespaces
     assert_eq!(
         flags_only("ab\t \t  c"),
-        single_line(&[
-            Token::Token("ab".to_string()),
-            Token::Token("c".to_string())
-        ])
+        single_line(&["ab".to_string(), "c".to_string()])
     );
     // Multiple quoted tokens
     assert_eq!(
         flags_only("\"t 1\" 't 2'"),
-        single_line(&[
-            Token::Token("t 1".to_string()),
-            Token::Token("t 2".to_string())
-        ])
+        single_line(&["t 1".to_string(), "t 2".to_string()])
     );
 
     // A token can be continued on the next line using a `\`
-    assert_single_flag!("a\\\nbc", Token::Token("abc".to_string()));
+    assert_single_flag!("a\\\nbc", "abc".to_string());
     // A quoted token does not continue across lines
-    assert!(tokenizer().parse("'my\ntoken'").is_err());
+    assert!(parser().parse("'my\ntoken'").is_err());
     // But a quoted token can contain escaped newlines
-    assert_single_flag!("'my\\\ntoken'", Token::Token("mytoken".to_string()));
+    assert_single_flag!("'my\\\ntoken'", "mytoken".to_string());
 
     // `#` inside a quoted token does not start a token
-    assert_single_flag!("'a#c'", Token::Token("a#c".to_string()));
+    assert_single_flag!("'a#c'", "a#c".to_string());
     // `#` can be escaped as part of a token
-    assert_single_flag!("a\\#c", Token::Token("a#c".to_string()));
+    assert_single_flag!("a\\#c", "a#c".to_string());
 }
 
 #[test]
 fn test_comments() {
     // Comments
     assert_eq!(
-        tokenizer().parse(" # my comment\n#2nd comment"),
+        parser().parse(" # my comment\n#2nd comment"),
         Ok(Vec::from([
             Line {
                 comment: Some((" my comment".to_string(), 1..13)),
@@ -307,7 +308,7 @@ fn test_comments() {
     );
     // Comments can be continued across lines with `\`
     assert_eq!(
-        tokenizer().parse(" # my\\\nco\\mment"),
+        parser().parse(" # my\\\nco\\mment"),
         Ok(Vec::from([Line {
             comment: Some((" my\nco\\mment".to_string(), 1..15)),
             ..Default::default()
@@ -316,10 +317,10 @@ fn test_comments() {
 
     // Comments can even start in the middle of a token, without a whitespace
     assert_eq!(
-        tokenizer().parse("cmd flag#comment"),
+        parser().parse("cmd flag#comment"),
         Ok(Vec::from([Line {
             command: Some(("cmd".to_string(), 0..3)),
-            tokens: Vec::from([(Token::Token("flag".to_string()), 4..8)]),
+            flags: Vec::from([("flag".to_string(), 4..8)]),
             comment: Some(("comment".to_string(), 8..16)),
             ..Default::default()
         }]))
