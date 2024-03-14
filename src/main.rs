@@ -1,3 +1,7 @@
+use bazelrc_lsp::diagnostic::diagnostics_from_parser;
+use bazelrc_lsp::parser::parser;
+use chumsky::Parser;
+use ropey::Rope;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -12,7 +16,7 @@ struct TextDocumentItem {
 
 #[derive(Debug)]
 struct AnalyzedDocument {
-    content: String,
+    rope: Rope,
 }
 
 #[derive(Debug)]
@@ -23,15 +27,21 @@ struct Backend {
 
 impl Backend {
     async fn on_change(&self, params: TextDocumentItem) {
+        let rope = ropey::Rope::from_str(&params.text);
+        let src = rope.to_string();
+
+        let (lines, parser_errors) = parser().parse_recovery(src);
+
+        let mut diagnostics = Vec::<Diagnostic>::new();
+        diagnostics.extend(diagnostics_from_parser(&rope, &parser_errors));
+        diagnostics.push(Diagnostic{ range: Range {start: Position{ line: 0, character: 0 }, end: Position{ line: 1, character: 0 }}, message: "LSP under development".to_string(), ..Default::default() });
+
         self.document_map.insert(
             params.uri.to_string(),
             AnalyzedDocument {
-                content: params.text
+                rope
             },
         );
-
-        let mut diagnostics = Vec::<Diagnostic>::new();
-        diagnostics.push(Diagnostic{ range: Range {start: Position{ line: 0, character: 0 }, end: Position{ line: 1, character: 0 }}, message: "LSP under development".to_string(), ..Default::default() });
 
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
