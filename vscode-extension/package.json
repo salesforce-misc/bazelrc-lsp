@@ -1,0 +1,67 @@
+{
+	"name": "bazelrc-lsp",
+	"description": "Code intelligence for bazerc files",
+	"displayName": "bazelrc language server",
+	"publisher": "Adrian Vogelsgesang",
+	"license": "Apache-2.0",
+	"version": "0.0.1",
+	"categories": [
+		"Programming Languages",
+		"Formatters",
+		"Linters"
+	],
+	"keywords": [
+		"language-server",
+		"Bazel"
+	],
+	"repository": {
+		"url": "https://github.com/vogelsgesang/bazelrc-lsp"
+	},
+	"engines": {
+		"vscode": "^1.83.0"
+	},
+	"enabledApiProposals": [],
+	"activationEvents": [],
+	"main": "./extension.js",
+	"markdown": "github",
+	"contributes": {
+		"languages": [
+			{
+				"id": "bazelrc",
+				"extensions": [
+					".bazelrc"
+				],
+				"aliases": [
+					"Bazel RC"
+				],
+				"configuration": "./bazelrc-language-configuration.json"
+			}
+		]
+	},
+	"scripts": {
+		"watch": "node ./build.js --watch",
+		"test-compile": "tsc -p ./",
+		"lint": "eslint src --ext ts",
+		"build": "node ./build.js",
+		"package": "pnpm build && cd dist && vsce package --no-dependencies -o ..",
+		"package:release": "pnpm build --release && cd dist && vsce package --no-dependencies -o ..",
+		"publish": "pnpm build --release && cd dist && vsce publish --no-dependencies -o .."
+	},
+	"dependencies": {
+		"vscode-languageclient": "^9.0.1"
+	},
+	"devDependencies": {
+		"@types/node": "^20.8.6",
+		"@types/vscode": "^1.83.0",
+		"@typescript-eslint/eslint-plugin": "^6.7.5",
+		"@typescript-eslint/parser": "^6.7.5",
+		"@vscode/vsce": "^2.21.1",
+		"esbuild": "^0.19.4",
+		"eslint": "^8.51.0",
+		"eslint-config-standard-with-typescript": "^39.1.1",
+		"eslint-plugin-import": "^2.25.2",
+		"eslint-plugin-n": "^15.0.0 || ^16.0.0 ",
+		"eslint-plugin-promise": "^6.0.0",
+		"typescript": "^5.2.2"
+	}
+}

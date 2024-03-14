@@ -1,0 +1,12 @@
+# This file tries out all the edge cases for bazelrc parsing.
+# A \
+  multine \
+  comment
+
+build --flag
+buil"d:my"config --flag
+
+# Multiline flag lists
+build:myconfig \
+  --flag \
+  continues_on_next_line
