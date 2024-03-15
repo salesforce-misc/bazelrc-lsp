@@ -21,6 +21,8 @@ async function build() {
     // Copy static artifacts
     await fs.copyFile('./package.json', './dist/package.json');
     await fs.copyFile('./bazelrc-language-configuration.json', './dist/bazelrc-language-configuration.json');
+    await fs.copyFile('../LICENSE', './dist/LICENSE');
+    await fs.copyFile('../README.md', './dist/README.md');
     // Rust build
     console.log("build rust...");
     {
