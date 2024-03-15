@@ -23,15 +23,21 @@ pub struct IndexEntry {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IndexedLines {
     pub lines: Vec<Line>,
-    reverse_idx: BTreeMap<usize, IndexEntry>,
+    reverse_token_idx: BTreeMap<usize, IndexEntry>,
+    reverse_line_idx: BTreeMap<usize, usize>,
 }
 
 impl IndexedLines {
     pub fn from_lines(lines: Vec<Line>) -> IndexedLines {
-        let mut reverse_idx_entries = Vec::<(usize, IndexEntry)>::new();
+        let mut reverse_token_idx_entries = Vec::<(usize, IndexEntry)>::new();
+        let mut reverse_line_idx_entries = Vec::<(usize, usize)>::new();
+
         for (line_nr, line) in lines.iter().enumerate() {
-            let mut add_to_idx = |span: &Span, kind: IndexEntryKind| {
-                reverse_idx_entries.push((
+            reverse_line_idx_entries.push((line.span.start, line_nr));
+
+            // Helper function to add a token to the index
+            let mut add_token_to_idx = |span: &Span, kind: IndexEntryKind| {
+                reverse_token_idx_entries.push((
                     span.start,
                     IndexEntry {
                         span: span.clone(),
@@ -43,39 +49,51 @@ impl IndexedLines {
 
             // Index the command
             if let Some(cmd) = &line.command {
-                add_to_idx(&cmd.1, IndexEntryKind::Command);
+                add_token_to_idx(&cmd.1, IndexEntryKind::Command);
             }
             // Index the config
             if let Some(config) = &line.config {
-                add_to_idx(&config.1, IndexEntryKind::Config);
+                add_token_to_idx(&config.1, IndexEntryKind::Config);
             }
             // Index the flags
             for (flag_nr, flag) in line.flags.iter().enumerate() {
                 if let Some(name) = &flag.name {
-                    add_to_idx(&name.1, IndexEntryKind::FlagName(flag_nr));
+                    add_token_to_idx(&name.1, IndexEntryKind::FlagName(flag_nr));
                 }
                 if let Some(value) = &flag.value {
-                    add_to_idx(&value.1, IndexEntryKind::FlagValue(flag_nr));
+                    add_token_to_idx(&value.1, IndexEntryKind::FlagValue(flag_nr));
                 }
             }
         }
         IndexedLines {
             lines,
-            reverse_idx: BTreeMap::<usize, IndexEntry>::from_iter(reverse_idx_entries),
+            reverse_token_idx: BTreeMap::from_iter(reverse_token_idx_entries),
+            reverse_line_idx: BTreeMap::from_iter(reverse_line_idx_entries),
         }
     }
 
-    pub fn find_symbol_at_position(&self, pos: usize) -> Option<&IndexEntry> {
-        self.reverse_idx
-            .iter()
-            .map(|e| e.1)
-            .find(|e| e.span.contains(&pos))
+    pub fn find_linenr_at_position(&self, pos: usize) -> Option<usize> {
+        self.reverse_line_idx
+            .values()
+            .find(|e| self.lines[**e].span.contains(&pos))
+            .map(|e| *e)
         /* TODO use 'upper_bound'
         self.reverse_idx
             .upper_bound(Bound::Included(&pos))
             .value()
             .filter(|s| s.span.contains(&pos))
         */
+    }
+
+    pub fn find_line_at_position(&self, pos: usize) -> Option<&Line> {
+        self.find_linenr_at_position(pos).and_then(|i| self.lines.get(i))
+    }
+
+    pub fn find_symbol_at_position(&self, pos: usize) -> Option<&IndexEntry> {
+        self.reverse_token_idx
+            .values()
+            .find(|e| e.span.contains(&pos))
+        /* TODO use 'upper_bound' */
     }
 }
 
@@ -92,7 +110,20 @@ build:opt --upload_results=false
         .lines,
     );
 
-    assert_eq!(index.reverse_idx, BTreeMap::<usize, IndexEntry>::from([
+    // Test the line index
+    assert_eq!(index.reverse_line_idx, BTreeMap::<usize, usize>::from([
+        (0, 0), (9, 1), (46, 2),
+    ]));
+
+    assert_eq!(index.find_linenr_at_position(0), Some(0));
+    assert_eq!(index.find_linenr_at_position(1), Some(0));
+    assert_eq!(index.find_linenr_at_position(9), Some(1));
+    assert_eq!(index.find_linenr_at_position(10), Some(1));
+    assert_eq!(index.find_linenr_at_position(40), Some(1));
+    assert_eq!(index.find_linenr_at_position(48), Some(2));
+
+    // Test the token index
+    assert_eq!(index.reverse_token_idx, BTreeMap::<usize, IndexEntry>::from([
         (9, IndexEntry { span: 9..15, line_nr: 1, kind: IndexEntryKind::Command }),
         (16, IndexEntry { span: 16..30, line_nr: 1, kind: IndexEntryKind::FlagName(0) }),
         (30, IndexEntry { span: 30..31, line_nr: 1, kind: IndexEntryKind::FlagValue(0) }),

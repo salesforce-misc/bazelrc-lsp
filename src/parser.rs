@@ -71,6 +71,7 @@ fn parse_flag(str: &str, span: &Span, orig: &str) -> Flag {
 fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
     let mut result_lines = Vec::<Line>::new();
 
+    let mut current_line_start = 0;
     let mut current_line = Option::<Line>::None;
     for t in tokens {
         match &t.0 {
@@ -96,14 +97,17 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
                 line.comment = Some((s.clone(), t.1.clone()));
             }
             Token::Newline => {
-                if let Some(l) = current_line.take() {
+                if let Some(mut l) = current_line.take() {
+                    l.span = current_line_start..t.1.start;
                     result_lines.push(l);
                 }
+                current_line_start = t.1.end;
             }
             Token::EscapedNewline => (),
         };
     }
-    if let Some(l) = current_line.take() {
+    if let Some(mut l) = current_line.take() {
+        l.span = current_line_start..orig.len();
         result_lines.push(l);
     }
 
@@ -133,6 +137,7 @@ fn test_command_specifier() {
         parse_from_str("cmd").lines,
         Vec::from([Line {
             command: Some(("cmd".to_string(), 0..3)),
+            span: 0..3,
             ..Default::default()
         },])
     );
@@ -143,6 +148,7 @@ fn test_command_specifier() {
         vec!(Line {
             command: Some(("cmd".to_string(), 0..3)),
             config: Some(("my-config".to_string(), 3..13)),
+            span: 0..13,
             ..Default::default()
         })
     );
@@ -153,6 +159,7 @@ fn test_command_specifier() {
         vec!(Line {
             command: Some(("cmd".to_string(), 0..3)),
             config: Some(("my- conf ig".to_string(), 3..18)),
+            span: 0..18,
             ..Default::default()
         })
     );
@@ -167,6 +174,7 @@ fn test_command_specifier() {
                 name: Some(("--x".to_string(), 13..16)),
                 value: Some(("y".to_string(), 16..18)),
             }),
+            span: 0..18,
             ..Default::default()
         })
     );
@@ -186,6 +194,7 @@ fn test_command_specifier() {
                     value: Some(("y".to_string(), 4..5)),
                 }
             ),
+            span: 0..5,
             ..Default::default()
         })
     );
@@ -202,6 +211,7 @@ fn test_flag_parsing() {
                 name: None,
                 value: Some(("foo".to_string(), 6..9)),
             }),
+            span: 0..9,
             ..Default::default()
         })
     );
@@ -215,6 +225,7 @@ fn test_flag_parsing() {
                 name: Some(("--x".to_string(), 0..3)),
                 value: None
             }),
+            span: 0..3,
             ..Default::default()
         })
     );
@@ -228,6 +239,7 @@ fn test_flag_parsing() {
                 name: Some(("-x".to_string(), 0..2)),
                 value: None
             }),
+            span: 0..2,
             ..Default::default()
         })
     );
@@ -241,6 +253,7 @@ fn test_flag_parsing() {
                 name: Some(("--x".to_string(), 0..3)),
                 value: Some(("y".to_string(), 3..5)),
             }),
+            span: 0..5,
             ..Default::default()
         })
     );
@@ -254,10 +267,12 @@ fn test_comments() {
         vec!(
             Line {
                 comment: Some((" my comment".to_string(), 1..13)),
+                span: 0..13,
                 ..Default::default()
             },
             Line {
                 comment: Some(("2nd comment".to_string(), 14..26)),
+                span: 14..26,
                 ..Default::default()
             }
         )
@@ -267,6 +282,7 @@ fn test_comments() {
         parse_from_str(" # my\\\nco\\mment").lines,
         vec!(Line {
             comment: Some((" my\nco\\mment".to_string(), 1..15)),
+            span: 0..15,
             ..Default::default()
         })
     );
@@ -277,6 +293,7 @@ fn test_comments() {
         vec!(Line {
             command: Some(("cmd".to_string(), 0..3)),
             comment: Some(("comment".to_string(), 4..12)),
+            span: 0..12,
             ..Default::default()
         })
     );
