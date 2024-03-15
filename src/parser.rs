@@ -6,10 +6,10 @@ pub type Spanned<T> = (T, Span);
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Line {
-    command: Option<Spanned<String>>,
-    config: Option<Spanned<String>>,
-    flags: Vec<Spanned<String>>,
-    comment: Option<Spanned<String>>,
+    pub command: Option<Spanned<String>>,
+    pub config: Option<Spanned<String>>,
+    pub flags: Vec<Spanned<String>>,
+    pub comment: Option<Spanned<String>>,
 }
 
 // Tokenizer and parser for bazelrc files.

@@ -1,12 +1,11 @@
-use bazelrc_lsp::diagnostic::diagnostics_from_parser;
+use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use bazelrc_lsp::parser::parser;
 use chumsky::Parser;
+use dashmap::DashMap;
 use ropey::Rope;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use dashmap::DashMap;
-
 
 struct TextDocumentItem {
     uri: Url,
@@ -30,18 +29,30 @@ impl Backend {
         let rope = ropey::Rope::from_str(&params.text);
         let src = rope.to_string();
 
-        let (lines, parser_errors) = parser().parse_recovery(src);
+        let (lines_opt, parser_errors) = parser().parse_recovery(src);
 
-        let mut diagnostics = Vec::<Diagnostic>::new();
+        let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
         diagnostics.extend(diagnostics_from_parser(&rope, &parser_errors));
-        diagnostics.push(Diagnostic{ range: Range {start: Position{ line: 0, character: 0 }, end: Position{ line: 1, character: 0 }}, message: "LSP under development".to_string(), ..Default::default() });
-
-        self.document_map.insert(
-            params.uri.to_string(),
-            AnalyzedDocument {
-                rope
+        if let Some(lines) = lines_opt {
+            diagnostics.extend(diagnostics_from_rcconfig(&rope, &lines));
+        }
+        diagnostics.push(Diagnostic {
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 1,
+                    character: 0,
+                },
             },
-        );
+            message: "LSP under development".to_string(),
+            ..Default::default()
+        });
+
+        self.document_map
+            .insert(params.uri.to_string(), AnalyzedDocument { rope });
 
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
@@ -52,7 +63,7 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
-        Ok(InitializeResult{
+        Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "bazelrc Language Server".to_string(),
                 version: Some("1".to_string()),
@@ -96,7 +107,8 @@ impl LanguageServer for Backend {
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        self.document_map.remove(&params.text_document.uri.to_string());
+        self.document_map
+            .remove(&params.text_document.uri.to_string());
     }
 }
 
@@ -105,6 +117,9 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| Backend {client, document_map: Default::default() });
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        document_map: Default::default(),
+    });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
