@@ -1,10 +1,9 @@
 use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags};
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
-use bazelrc_lsp::parser::parser;
+use bazelrc_lsp::parser::{parse_from_str, ParserResult};
 use bazelrc_lsp::semantic_token::{
-    convert_to_lsp_tokens, semantic_tokens_from_tokens, RCSemanticToken, LEGEND_TYPE,
+    convert_to_lsp_tokens, semantic_tokens_from_lines, RCSemanticToken, LEGEND_TYPE,
 };
-use chumsky::Parser;
 use dashmap::DashMap;
 use ropey::Rope;
 use tower_lsp::jsonrpc::Result;
@@ -35,15 +34,16 @@ impl Backend {
         let rope = ropey::Rope::from_str(&params.text);
         let src = rope.to_string();
 
-        let (lines_opt, parser_errors) = parser().parse_recovery(src);
+        let ParserResult {
+            tokens: _,
+            lines,
+            errors,
+        } = parse_from_str(&src);
+        let semantic_tokens = semantic_tokens_from_lines(&lines);
 
         let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
-        diagnostics.extend(diagnostics_from_parser(&rope, &parser_errors));
-        let mut semantic_tokens = Vec::<RCSemanticToken>::new();
-        if let Some(lines) = lines_opt {
-            diagnostics.extend(diagnostics_from_rcconfig(&rope, &lines, &self.bazel_flags));
-            semantic_tokens = semantic_tokens_from_tokens(&lines);
-        }
+        diagnostics.extend(diagnostics_from_parser(&rope, &errors));
+        diagnostics.extend(diagnostics_from_rcconfig(&rope, &lines, &self.bazel_flags));
 
         self.document_map.insert(
             params.uri.to_string(),

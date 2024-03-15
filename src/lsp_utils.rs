@@ -1,7 +1,7 @@
 use ropey::Rope;
 use tower_lsp::lsp_types::{Position, Range};
 
-use crate::parser::Span;
+use crate::tokenizer::Span;
 
 pub fn lsp_pos_to_offset(rope: &Rope, pos: &Position) -> Option<usize> {
     let char = rope.try_line_to_char(pos.line as usize).ok()?;

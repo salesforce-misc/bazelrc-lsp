@@ -1,7 +1,7 @@
 use ropey::Rope;
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
 
-use crate::parser::{Line, Span};
+use crate::{parser::Line, tokenizer::Span};
 
 pub const LEGEND_TYPE: &[SemanticTokenType] = &[
     SemanticTokenType::COMMENT,
@@ -27,24 +27,42 @@ pub fn create_semantic_token(span: &Span, ttype: &SemanticTokenType) -> RCSemant
 }
 
 /// Creates semantic tokens from the lexer tokens
-pub fn semantic_tokens_from_tokens(lines: &[Line]) -> Vec<RCSemanticToken> {
+pub fn semantic_tokens_from_lines(lines: &[Line]) -> Vec<RCSemanticToken> {
     let mut tokens = Vec::<RCSemanticToken>::new();
 
-    tokens.extend(
-        lines
-            .iter()
-            .filter_map(|line| {
-                if let Some(comment) = &line.comment {
-                    Some(create_semantic_token(
-                        &comment.1,
-                        &SemanticTokenType::COMMENT,
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>(),
-    );
+    for line in lines {
+        // Highlight commands
+        if let Some(cmd) = &line.command {
+            tokens.push(create_semantic_token(&cmd.1, &SemanticTokenType::KEYWORD))
+        }
+
+        // Highlight config names
+        if let Some(config) = &line.config {
+            tokens.push(create_semantic_token(
+                &config.1,
+                &SemanticTokenType::NAMESPACE,
+            ))
+        }
+
+        // Highlight all the flags
+        for flag in &line.flags {
+            if let Some(name) = &flag.name {
+                tokens.push(create_semantic_token(&name.1, &SemanticTokenType::VARIABLE))
+            }
+            if let Some(value) = &flag.value {
+                tokens.push(create_semantic_token(&value.1, &SemanticTokenType::STRING))
+            }
+        }
+
+        // Highlight comments
+        if let Some(comment) = &line.comment {
+            tokens.push(create_semantic_token(
+                &comment.1,
+                &SemanticTokenType::COMMENT,
+            ))
+        }
+    }
+
     tokens
 }
 
@@ -55,24 +73,25 @@ pub fn convert_to_lsp_tokens(rope: &Rope, semtoks: &[RCSemanticToken]) -> Vec<Se
     let lsp_tokens = semtoks
         .iter()
         .filter_map(|token| {
-            let start_line = rope.try_byte_to_line(token.start).ok()?;
-            let end_line = rope.try_byte_to_line(token.end).ok()?;
+            let start_line = rope.try_char_to_line(token.start).ok()?;
+            let end_line = rope.try_char_to_line(token.end).ok()?;
             let tokens = (start_line..(end_line + 1))
                 .filter_map(|line| {
                     // Figure out start and end offset within line
                     let first = rope.try_line_to_char(line).ok()? as u32;
                     let start: u32;
-                    let length: u32;
+                    let end: u32;
                     if line == start_line {
-                        start = rope.try_byte_to_char(token.start).ok()? as u32 - first;
+                        start = token.start as u32 - first;
                     } else {
                         start = 0;
                     }
                     if line == end_line {
-                        length = rope.try_byte_to_char(token.end).ok()? as u32 - first;
+                        end = token.end as u32 - first;
                     } else {
-                        length = rope.get_line(line)?.len_chars() as u32;
+                        end = rope.get_line(line).unwrap().len_chars() as u32;
                     }
+                    let length = end - start;
                     // Compute deltas to previous token
                     assert!(line >= pre_line);
                     let delta_line = (line - pre_line) as u32;

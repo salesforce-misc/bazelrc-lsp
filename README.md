@@ -16,7 +16,7 @@ Contributions are welcome. Feel free to just open a pull request.
 
 ### Backlog
 
-* Syntax highlighting / semantic tokens
+* ✔ Syntax highlighting / semantic tokens
 * Diagnose invalid command line args
   * unknown args
   * repeated args
