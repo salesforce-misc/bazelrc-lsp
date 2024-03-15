@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum IndexEntryKind {
+pub enum IndexEntryKind {
     Command,
     Config,
     FlagValue(usize),
@@ -14,7 +14,7 @@ enum IndexEntryKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct IndexEntry {
+pub struct IndexEntry {
     pub span: Span,
     pub line_nr: usize,
     pub kind: IndexEntryKind,

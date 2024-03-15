@@ -17,16 +17,21 @@ Contributions are welcome. Feel free to just open a pull request.
 ### Backlog
 
 * ✔ Syntax highlighting / semantic tokens
+  * highlight deprecated options
 * Diagnose invalid command line args
   * unknown args
   * repeated args
-* Show documentation of flags on hover
+* Hover
+  * ✔ Show documentation of flags on hover
+  * Show documentation for commands on hover
 * Autocomplete
   * ✔ basic auto-complete
   * context-aware auto-complete
     * flags
     * command names
     * config names
+  * auto-complete based on category / tags
 * Format / pretty print
 * Rename functionality for config names
+* References: Find other usages of same flag
 * `import` support

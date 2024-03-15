@@ -3,6 +3,9 @@
   multine \
   comment
 
+# A couple of valid flags; also including a shorthand option
+build --keep_going --remote_cache= -k
+
 build --flag
 built --flag
 buil"d:my"config --flag

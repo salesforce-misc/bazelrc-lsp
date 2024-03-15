@@ -1,13 +1,15 @@
 use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags};
 use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
+use bazelrc_lsp::line_index::{IndexEntry, IndexEntryKind, IndexedLines};
+use bazelrc_lsp::lsp_utils::{lsp_pos_to_offset, range_to_lsp};
 use bazelrc_lsp::parser::{parse_from_str, ParserResult};
 use bazelrc_lsp::semantic_token::{
     convert_to_lsp_tokens, semantic_tokens_from_lines, RCSemanticToken, LEGEND_TYPE,
 };
 use dashmap::DashMap;
 use ropey::Rope;
-use tower_lsp::jsonrpc::Result;
+use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
@@ -21,6 +23,7 @@ struct TextDocumentItem {
 struct AnalyzedDocument {
     rope: Rope,
     semantic_tokens: Vec<RCSemanticToken>,
+    indexed_lines: IndexedLines,
 }
 
 #[derive(Debug)]
@@ -41,16 +44,22 @@ impl Backend {
             errors,
         } = parse_from_str(&src);
         let semantic_tokens = semantic_tokens_from_lines(&lines);
+        let indexed_lines = IndexedLines::from_lines(lines);
 
         let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
         diagnostics.extend(diagnostics_from_parser(&rope, &errors));
-        diagnostics.extend(diagnostics_from_rcconfig(&rope, &lines, &self.bazel_flags));
+        diagnostics.extend(diagnostics_from_rcconfig(
+            &rope,
+            &indexed_lines.lines,
+            &self.bazel_flags,
+        ));
 
         self.document_map.insert(
             params.uri.to_string(),
             AnalyzedDocument {
                 rope,
                 semantic_tokens,
+                indexed_lines,
             },
         );
 
@@ -102,6 +111,7 @@ impl LanguageServer for Backend {
                     trigger_characters: Some(vec!["-".to_string()]),
                     ..Default::default()
                 }),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 ..ServerCapabilities::default()
             },
         })
@@ -145,27 +155,57 @@ impl LanguageServer for Backend {
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
         let uri = params.text_document.uri.to_string();
-        let lsp_tokens = || -> Option<Vec<SemanticToken>> {
-            let doc = self.document_map.get(&uri)?;
-            let lsp_tokens = convert_to_lsp_tokens(&doc.rope, &doc.semantic_tokens);
-            Some(lsp_tokens)
-        }();
-        self.client
-            .log_message(MessageType::INFO, format!("tokens {:?}", &lsp_tokens))
-            .await;
-        if let Some(semantic_token) = lsp_tokens {
-            return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
-                result_id: None,
-                data: semantic_token,
-            })));
-        }
-        Ok(None)
+        let doc = self
+            .document_map
+            .get(&uri)
+            .ok_or(Error::invalid_params("Unknown document!"))?;
+        let lsp_tokens = convert_to_lsp_tokens(&doc.rope, &doc.semantic_tokens);
+        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+            result_id: None,
+            data: lsp_tokens,
+        })))
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         Ok(Some(CompletionResponse::Array(get_completion_items(
             &self.bazel_flags,
         ))))
+    }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        // Find the right document and offset
+        let text_document_position = params.text_document_position_params;
+        let uri = text_document_position.text_document.uri.to_string();
+        let doc = self
+            .document_map
+            .get(&uri)
+            .ok_or(Error::invalid_params("Unknown document!"))?;
+        let pos = lsp_pos_to_offset(&doc.rope, &text_document_position.position)
+            .ok_or(Error::invalid_params("Position out of range"))?;
+
+        Ok(|| -> Option<Hover> {
+            // Find the symbol at the position and provide the hover documentation
+            let IndexEntry {
+                span,
+                line_nr,
+                kind,
+            } = doc.indexed_lines.find_symbol_at_position(pos)?;
+            match kind {
+                IndexEntryKind::Command => None,
+                IndexEntryKind::Config => None,
+                IndexEntryKind::FlagValue(flag_nr) | IndexEntryKind::FlagName(flag_nr) => {
+                    let line = &doc.indexed_lines.lines[*line_nr];
+                    let flag_name = &line.flags.get(*flag_nr)?.name.as_ref()?.0;
+                    let flag_info = self.bazel_flags.get_by_invocation(flag_name)?;
+                    let content = flag_info.get_documentation_markdown();
+                    let contents = HoverContents::Scalar(MarkedString::String(content));
+                    Some(Hover {
+                        contents,
+                        range: range_to_lsp(&doc.rope, span),
+                    })
+                }
+            }
+        }())
     }
 }
 
