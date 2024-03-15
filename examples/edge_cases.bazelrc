@@ -4,6 +4,7 @@
   comment
 
 build --flag
+built --flag
 buil"d:my"config --flag
 
 # Multiline flag lists

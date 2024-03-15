@@ -57,7 +57,7 @@ pub fn diagnostics_from_rcconfig(
             if flags_for_command.is_none() {
                 diagnostics.push(Diagnostic::new_simple(
                     range_to_lsp(rope, span).unwrap(),
-                    format!("unknown command `{:?}`", command),
+                    format!("unknown command {:?}", command),
                 ));
             }
         } else if !l.flags.is_empty() {
