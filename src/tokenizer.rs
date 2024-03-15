@@ -121,6 +121,16 @@ fn test_newlines() {
             (Token::Newline, 14..15),
         ]))
     );
+
+    // Newlines can be escaped
+    assert_eq!(
+        tokenizer().parse("cmd\\\n  -x\n"),
+        Ok(Vec::from([
+            (Token::Token("cmd".to_string()), 0..5),
+            (Token::Token("-x".to_string()), 7..9),
+            (Token::Newline, 9..10),
+        ]))
+    );
 }
 
 #[test]
