@@ -2,7 +2,7 @@ use chumsky::error::Simple;
 use ropey::Rope;
 use tower_lsp::lsp_types::Diagnostic;
 
-use crate::{lsp_utils::range_to_lsp, parser::Line};
+use crate::{bazel_flags::BazelFlags, lsp_utils::range_to_lsp, parser::Line};
 
 pub fn diagnostics_from_parser<'a>(
     rope: &'a Rope,
@@ -44,34 +44,17 @@ pub fn diagnostics_from_parser<'a>(
     })
 }
 
-pub fn diagnostics_from_rcconfig(rope: &Rope, lines: &[Line]) -> Vec<Diagnostic> {
+pub fn diagnostics_from_rcconfig(
+    rope: &Rope,
+    lines: &[Line],
+    bazel_flags: &BazelFlags,
+) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
-    let commands = [
-        "startup",
-        "aquery",
-        "build",
-        "clean",
-        "coverage",
-        "cquery",
-        "fetch",
-        "help",
-        "info",
-        "license",
-        "mobile-install",
-        "mod",
-        "print_action",
-        "query",
-        "run",
-        "shutdown",
-        "sync",
-        "test",
-        "vendor",
-        "version",
-    ];
 
     for l in lines {
         if let Some((command, span)) = &l.command {
-            if !commands.contains(&command.as_str()) {
+            let flags_for_command = bazel_flags.flags_by_commands.get(command);
+            if flags_for_command.is_none() {
                 diagnostics.push(Diagnostic::new_simple(
                     range_to_lsp(rope, span).unwrap(),
                     format!("unknown command `{:?}`", command),

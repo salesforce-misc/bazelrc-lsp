@@ -1,3 +1,4 @@
+use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags};
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use bazelrc_lsp::parser::parser;
 use chumsky::Parser;
@@ -22,6 +23,7 @@ struct AnalyzedDocument {
 struct Backend {
     client: Client,
     document_map: DashMap<String, AnalyzedDocument>,
+    bazel_flags: BazelFlags,
 }
 
 impl Backend {
@@ -34,7 +36,7 @@ impl Backend {
         let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
         diagnostics.extend(diagnostics_from_parser(&rope, &parser_errors));
         if let Some(lines) = lines_opt {
-            diagnostics.extend(diagnostics_from_rcconfig(&rope, &lines));
+            diagnostics.extend(diagnostics_from_rcconfig(&rope, &lines, &self.bazel_flags));
         }
         diagnostics.push(Diagnostic {
             range: Range {
@@ -120,6 +122,7 @@ async fn main() {
     let (service, socket) = LspService::new(|client| Backend {
         client,
         document_map: Default::default(),
+        bazel_flags: load_bazel_flags(),
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
