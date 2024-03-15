@@ -1,6 +1,9 @@
 use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags};
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use bazelrc_lsp::parser::parser;
+use bazelrc_lsp::semantic_token::{
+    convert_to_lsp_tokens, semantic_tokens_from_tokens, RCSemanticToken, LEGEND_TYPE,
+};
 use chumsky::Parser;
 use dashmap::DashMap;
 use ropey::Rope;
@@ -17,6 +20,7 @@ struct TextDocumentItem {
 #[derive(Debug)]
 struct AnalyzedDocument {
     rope: Rope,
+    semantic_tokens: Vec<RCSemanticToken>,
 }
 
 #[derive(Debug)]
@@ -35,26 +39,19 @@ impl Backend {
 
         let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
         diagnostics.extend(diagnostics_from_parser(&rope, &parser_errors));
+        let mut semantic_tokens = Vec::<RCSemanticToken>::new();
         if let Some(lines) = lines_opt {
             diagnostics.extend(diagnostics_from_rcconfig(&rope, &lines, &self.bazel_flags));
+            semantic_tokens = semantic_tokens_from_tokens(&lines);
         }
-        diagnostics.push(Diagnostic {
-            range: Range {
-                start: Position {
-                    line: 0,
-                    character: 0,
-                },
-                end: Position {
-                    line: 1,
-                    character: 0,
-                },
-            },
-            message: "LSP under development".to_string(),
-            ..Default::default()
-        });
 
-        self.document_map
-            .insert(params.uri.to_string(), AnalyzedDocument { rope });
+        self.document_map.insert(
+            params.uri.to_string(),
+            AnalyzedDocument {
+                rope,
+                semantic_tokens,
+            },
+        );
 
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
@@ -75,6 +72,31 @@ impl LanguageServer for Backend {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
+                        SemanticTokensRegistrationOptions {
+                            text_document_registration_options: {
+                                TextDocumentRegistrationOptions {
+                                    document_selector: Some(vec![DocumentFilter {
+                                        language: Some("bazelrc".to_string()),
+                                        scheme: None,
+                                        pattern: None,
+                                    }]),
+                                }
+                            },
+                            semantic_tokens_options: SemanticTokensOptions {
+                                work_done_progress_options: WorkDoneProgressOptions::default(),
+                                legend: SemanticTokensLegend {
+                                    token_types: LEGEND_TYPE.into(),
+                                    token_modifiers: vec![],
+                                },
+                                range: None,
+                                full: Some(SemanticTokensFullOptions::Bool(true)),
+                            },
+                            static_registration_options: StaticRegistrationOptions::default(),
+                        },
+                    ),
+                ),
                 ..ServerCapabilities::default()
             },
         })
@@ -111,6 +133,28 @@ impl LanguageServer for Backend {
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         self.document_map
             .remove(&params.text_document.uri.to_string());
+    }
+
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = params.text_document.uri.to_string();
+        let lsp_tokens = || -> Option<Vec<SemanticToken>> {
+            let doc = self.document_map.get(&uri)?;
+            let lsp_tokens = convert_to_lsp_tokens(&doc.rope, &doc.semantic_tokens);
+            Some(lsp_tokens)
+        }();
+        self.client
+            .log_message(MessageType::INFO, format!("tokens {:?}", &lsp_tokens))
+            .await;
+        if let Some(semantic_token) = lsp_tokens {
+            return Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+                result_id: None,
+                data: semantic_token,
+            })));
+        }
+        Ok(None)
     }
 }
 
