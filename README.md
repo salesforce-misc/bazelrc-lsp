@@ -21,9 +21,9 @@ Contributions are welcome. Feel free to just open a pull request.
 * Diagnose invalid command line args
   * unknown args
   * repeated args
-* Hover
+* ✔ Hover
   * ✔ Show documentation of flags on hover
-  * Show documentation for commands on hover
+  * ✔ Show documentation for commands on hover
 * Autocomplete
   * ✔ basic auto-complete
   * context-aware auto-complete

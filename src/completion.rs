@@ -1,7 +1,7 @@
 use tower_lsp::lsp_types::{CompletionItem, Documentation, MarkupContent, MarkupKind};
 
 use crate::{
-    bazel_flags::BazelFlags,
+    bazel_flags::{BazelFlags, COMMAND_DOCS},
     line_index::{IndexEntryKind, IndexedLines},
 };
 
@@ -12,6 +12,7 @@ fn complete_bazel_command(bazel_flags: &BazelFlags) -> Vec<CompletionItem> {
         .map(|cmd| CompletionItem {
             label: cmd.clone(),
             commit_characters: Some(vec![':'.to_string(), ' '.to_string()]),
+            documentation: get_command_documentation(cmd),
             ..Default::default()
         })
         .collect::<Vec<_>>()
@@ -36,7 +37,7 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
     // The Bazel flags themselves...
     completion_items.extend(relevant_flags.clone().map(|flag| CompletionItem {
         label: flag.name.clone(),
-        documentation: get_documentation(flag),
+        documentation: get_flag_documentation(flag),
         commit_characters: Some(vec!['='.to_string(), ' '.to_string()]),
         ..Default::default()
     }));
@@ -47,7 +48,7 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
             .filter(|flag| flag.has_negative_flag())
             .map(|flag| CompletionItem {
                 label: format!("no{}", flag.name.clone()),
-                documentation: get_documentation(flag),
+                documentation: get_flag_documentation(flag),
                 commit_characters: Some(vec!['='.to_string(), ' '.to_string()]),
                 ..Default::default()
             }),
@@ -98,10 +99,20 @@ pub fn get_completion_items(
     }
 }
 
-fn get_documentation(flag: &crate::bazel_flags_proto::FlagInfo) -> Option<Documentation> {
+fn get_flag_documentation(flag: &crate::bazel_flags_proto::FlagInfo) -> Option<Documentation> {
     let mc = MarkupContent {
         kind: MarkupKind::Markdown,
         value: flag.get_documentation_markdown(),
     };
     Some(Documentation::MarkupContent(mc))
+}
+
+fn get_command_documentation(command: &str) -> Option<Documentation> {
+    COMMAND_DOCS.get(command).and_then(|docs| {
+        let mc = MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: docs.to_string(),
+        };
+        Some(Documentation::MarkupContent(mc))
+    })
 }

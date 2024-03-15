@@ -13,6 +13,7 @@ chumsky = { version = "0.9.3" }
 dashmap = "5.1.0"
 ropey = "1.6.1"
 prost = "0.12"
+phf = { version = "0.11.2", features = ["macros"] }
 
 [build-dependencies]
 prost-build = { version = "0.12.3" }

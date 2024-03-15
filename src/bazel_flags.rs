@@ -1,7 +1,34 @@
+use phf::phf_map;
 use prost::Message;
 use std::{collections::HashMap, io::Cursor};
 
 use crate::bazel_flags_proto::{FlagCollection, FlagInfo};
+
+// The command line docs, taken from the `bazel help`
+pub static COMMAND_DOCS: phf::Map<&'static str, &'static str> = phf_map! {
+    "analyze-profile" => "Analyzes build profile data.",
+    "aquery" => "Analyzes the given targets and queries the action graph.",
+    "build" => "Builds the specified targets.",
+    "canonicalize-flags" => "Canonicalizes a list of bazel options.",
+    "clean" => "Removes output files and optionally stops the server.",
+    "coverage" => "Generates code coverage report for specified test targets.",
+    "cquery" => "Loads, analyzes, and queries the specified targets w/ configurations.",
+    "dump" => "Dumps the internal state of the bazel server process.",
+    "fetch" => "Fetches external repositories that are prerequisites to the targets.",
+    "help" => "Prints help for commands, or the index.",
+    "info" => "Displays runtime info about the bazel server.",
+    "license" => "Prints the license of this software.",
+    "mobile-install" => "Installs targets to mobile devices.",
+    "mod" => "Queries the Bzlmod external dependency graph",
+    "print_action" => "Prints the command line args for compiling a file.",
+    "query" => "Executes a dependency graph query.",
+    "run" => "Runs the specified target.",
+    "shutdown" => "Stops the bazel server.",
+    "sync" => "Syncs all repositories specified in the workspace file",
+    "test" => "Builds and runs the specified test targets.",
+    "vendor" => "Fetches external repositories into a specific folder specified by the flag --vendor_dir.",
+    "version" => "Prints version information for bazel.",
+};
 
 #[derive(Debug)]
 pub struct BazelFlags {

@@ -1,4 +1,4 @@
-use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags};
+use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags, COMMAND_DOCS};
 use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use bazelrc_lsp::line_index::{IndexEntry, IndexEntryKind, IndexedLines};
@@ -202,7 +202,21 @@ impl LanguageServer for Backend {
                 kind,
             } = doc.indexed_lines.find_symbol_at_position(pos)?;
             match kind {
-                IndexEntryKind::Command => None,
+                IndexEntryKind::Command => {
+                    let line = &doc.indexed_lines.lines[*line_nr];
+
+                    line.command
+                        .as_ref()
+                        .and_then(|cmd| COMMAND_DOCS.get(&cmd.0.as_str()))
+                        .and_then(|docs| {
+                            let contents =
+                                HoverContents::Scalar(MarkedString::String(docs.to_string()));
+                            Some(Hover {
+                                contents,
+                                range: range_to_lsp(&doc.rope, span),
+                            })
+                        })
+                }
                 IndexEntryKind::Config => None,
                 IndexEntryKind::FlagValue(flag_nr) | IndexEntryKind::FlagName(flag_nr) => {
                     let line = &doc.indexed_lines.lines[*line_nr];
