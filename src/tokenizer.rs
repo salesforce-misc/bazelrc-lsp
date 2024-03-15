@@ -11,6 +11,7 @@ pub enum Token {
     Token(String),
     Comment(String),
     Newline,
+    EscapedNewline,
 }
 
 impl fmt::Display for Token {
@@ -19,6 +20,7 @@ impl fmt::Display for Token {
             Token::Token(_) => write!(f, "token"),
             Token::Comment(_) => write!(f, "comment"),
             Token::Newline => write!(f, "\\n"),
+            Token::EscapedNewline => write!(f, "escaped newline"),
         }
     }
 }
@@ -50,13 +52,14 @@ pub fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char
 
     // Newlines can be escaped using a `\`, but in contrast to other escaped parameters they
     // don't contribute any characters to the token value.
-    let escaped_newline = just('\\').ignore_then(newline_raw);
+    let escaped_newline_raw = just('\\').ignore_then(newline_raw);
+    let escaped_newline = escaped_newline_raw.map(|_| Token::EscapedNewline);
 
     // A token character can be either a raw character, an escaped character
     // or an escaped newline.
     let token_char = (raw_token_char.or(escaped_char))
         .map(Option::Some)
-        .or(escaped_newline.to(Option::<char>::None));
+        .or(escaped_newline_raw.to(Option::<char>::None));
 
     // A token consists of multiple token_chars
     let unquoted_token_raw = token_char.repeated().at_least(1);
@@ -85,12 +88,12 @@ pub fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char
     // Comments go until the end of line.
     // However a newline might be escaped using `\`
     let comment = just('#')
-        .ignore_then(escaped_newline.or(one_of("\n\r").not()).repeated())
+        .ignore_then(escaped_newline_raw.or(one_of("\n\r").not()).repeated())
         .collect::<String>()
         .map(|v| Token::Comment(v));
 
     // Detect `command` and `command:config` in the beginnig of a line
-    let token = choice((comment, mixed_token, newline))
+    let token = choice((comment, escaped_newline, newline, mixed_token))
         .recover_with(skip_then_retry_until([]))
         .map_with_span(|tok, span| (tok, span));
 
@@ -124,9 +127,10 @@ fn test_newlines() {
 
     // Newlines can be escaped
     assert_eq!(
-        tokenizer().parse("cmd\\\n  -x\n"),
+        tokenizer().parse("cmd \\\n -x\n"),
         Ok(Vec::from([
-            (Token::Token("cmd".to_string()), 0..5),
+            (Token::Token("cmd".to_string()), 0..3),
+            (Token::EscapedNewline, 4..6),
             (Token::Token("-x".to_string()), 7..9),
             (Token::Newline, 9..10),
         ]))
