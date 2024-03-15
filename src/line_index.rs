@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    parser::{parse_from_str, Line},
+    parser::Line,
     tokenizer::Span,
 };
 
@@ -100,7 +100,9 @@ impl IndexedLines {
 
 #[test]
 #[rustfmt::skip]
-fn test_command_specifier() {
+fn test_index() {
+    use crate::parser::parse_from_str;
+
     let index = IndexedLines::from_lines(
         parse_from_str(
             "# config
