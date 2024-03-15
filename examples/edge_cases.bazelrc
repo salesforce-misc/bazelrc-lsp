@@ -12,6 +12,10 @@ buil"d:my"config --flag
 build: --flag
 build:my\ -config --flag
 
+# `common` and `alway` are special cases for bazelrc files
+common --flag
+always --flag2
+
 # Invalid command
 clear --flag
 

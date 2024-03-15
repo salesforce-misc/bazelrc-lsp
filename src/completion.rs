@@ -7,8 +7,8 @@ use crate::{
 
 fn complete_bazel_command(bazel_flags: &BazelFlags) -> Vec<CompletionItem> {
     bazel_flags
-        .flags_by_commands
-        .keys()
+        .commands
+        .iter()
         .map(|cmd| CompletionItem {
             label: cmd.clone(),
             commit_characters: Some(vec![':'.to_string(), ' '.to_string()]),
@@ -19,22 +19,30 @@ fn complete_bazel_command(bazel_flags: &BazelFlags) -> Vec<CompletionItem> {
 }
 
 fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<CompletionItem> {
-    let mut completion_items: Vec<CompletionItem> = Vec::<CompletionItem>::new();
+    let exisiting_flags = bazel_flags.flags_by_commands.get(command);
 
-    let relevant_flags = bazel_flags.flags.iter().filter(|f| {
-        // Hide no-op / deprecated flags
-        if f.effect_tags.contains(&"NO_OP".to_string()) {
-            return false;
-        }
-        // Hide undocumented flags
-        if f.documentation_category == Some("UNDOCUMENTED".to_string()) {
-            return false;
-        }
-        // Only show flags relevant for the current command
-        return f.commands.iter().any(|c| c == command);
-    });
+    if exisiting_flags.is_none() {
+        return vec![];
+    }
+
+    let relevant_flags = exisiting_flags
+        .unwrap()
+        .iter()
+        .map(|i| &bazel_flags.flags[*i])
+        .filter(|f| {
+            // Hide no-op / deprecated flags
+            if f.effect_tags.contains(&"NO_OP".to_string()) {
+                return false;
+            }
+            // Hide undocumented flags
+            if f.documentation_category == Some("UNDOCUMENTED".to_string()) {
+                return false;
+            }
+            return true;
+        });
 
     // The Bazel flags themselves...
+    let mut completion_items: Vec<CompletionItem> = Vec::<CompletionItem>::new();
     completion_items.extend(relevant_flags.clone().map(|flag| CompletionItem {
         label: flag.name.clone(),
         documentation: get_flag_documentation(flag),

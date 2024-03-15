@@ -1,11 +1,14 @@
 use phf::phf_map;
 use prost::Message;
-use std::{collections::HashMap, io::Cursor};
+use std::{
+    collections::HashMap,
+    io::Cursor,
+};
 
 use crate::bazel_flags_proto::{FlagCollection, FlagInfo};
 
-// The command line docs, taken from the `bazel help`
 pub static COMMAND_DOCS: phf::Map<&'static str, &'static str> = phf_map! {
+    // The command line docs, taken from the `bazel help`
     "analyze-profile" => "Analyzes build profile data.",
     "aquery" => "Analyzes the given targets and queries the action graph.",
     "build" => "Builds the specified targets.",
@@ -28,10 +31,18 @@ pub static COMMAND_DOCS: phf::Map<&'static str, &'static str> = phf_map! {
     "test" => "Builds and runs the specified test targets.",
     "vendor" => "Fetches external repositories into a specific folder specified by the flag --vendor_dir.",
     "version" => "Prints version information for bazel.",
+    // bazelrc specific commands. Taken from https://bazel.build/run/bazelrc
+    "startup" => "Startup options, which go before the command, and are described in `bazel help startup_options`.",
+    "common" => "Options that should be applied to all Bazel commands that support them. If a command does not support an option specified in this way, the option is ignored so long as it is valid for some other Bazel command. Note that this only applies to option names: If the current command accepts an option with the specified name, but doesn't support the specified value, it will fail.",
+    "always" => "Options that apply to all Bazel commands. If a command does not support an option specified in this way, it will fail.",
+    // Import. Documentation written by myself
+    "import" => "Imports the given file. Fails if the file is not found.",
+    "try-import" => "Tries to import the given file. Does not fail if the file is not found.",
 };
 
 #[derive(Debug)]
 pub struct BazelFlags {
+    pub commands: Vec<String>,
     pub flags: Vec<FlagInfo>,
     pub flags_by_commands: HashMap<String, Vec<usize>>,
     pub flags_by_name: HashMap<String, usize>,
@@ -40,6 +51,7 @@ pub struct BazelFlags {
 
 impl BazelFlags {
     pub fn from_flags(flags: Vec<FlagInfo>) -> BazelFlags {
+        // Index the flags from the protobuf description
         let mut flags_by_commands = HashMap::<String, Vec<usize>>::new();
         let mut flags_by_name = HashMap::<String, usize>::new();
         let mut flags_by_abbreviation = HashMap::<String, usize>::new();
@@ -55,8 +67,33 @@ impl BazelFlags {
                 flags_by_abbreviation.insert(abbreviation.clone(), i);
             }
         }
+
+        // The `common` option is the union of all other options
+        let mut common_flags = flags_by_commands
+            .values()
+            .flatten()
+            .map(|v| *v)
+            .collect::<Vec<_>>();
+        common_flags.sort();
+        common_flags.dedup();
+        flags_by_commands.insert("common".to_string(), common_flags.clone());
+
+        // For safe usage, the `always` option should be the intersection of all other options.
+        // Using an option not supported by all commands would otherwise make some commands
+        // unusable. But there are no options which are valid for *all* commands.
+        // Hence, I am using the union of all flags.
+        flags_by_commands.insert("always".to_string(), common_flags);
+
+        // Determine the list of supported commands
+        let mut commands = flags_by_commands
+            .keys()
+            .map(|k| k.clone())
+            .collect::<Vec<_>>();
+        commands.extend(["import".to_string(), "try-import".to_string()]);
+
         return BazelFlags {
-            flags: flags,
+            commands,
+            flags,
             flags_by_commands,
             flags_by_name,
             flags_by_abbreviation,
@@ -95,37 +132,6 @@ pub fn load_bazel_flags() -> BazelFlags {
         .unwrap()
         .flag_infos;
     return BazelFlags::from_flags(flags);
-}
-
-#[test]
-fn test_flags() {
-    let flags = load_bazel_flags();
-    let mut commands = flags
-        .flags_by_commands
-        .keys()
-        .map(|s| s.clone())
-        .collect::<Vec<_>>();
-    assert!(commands.contains(&"build".to_string()));
-    assert!(commands.contains(&"clean".to_string()));
-    assert!(commands.contains(&"test".to_string()));
-
-    // Can lookup a flag by its invocation
-    let preemptible_info = flags.get_by_invocation("--preemptible");
-    assert_eq!(
-        preemptible_info
-            .unwrap()
-            .commands
-            .iter()
-            .map(|n| n.to_string())
-            .collect::<Vec<_>>(),
-        vec!("startup")
-    );
-
-    // Supports both short and long forms
-    assert_eq!(
-        flags.get_by_invocation("-k"),
-        flags.get_by_invocation("--keep_going")
-    );
 }
 
 impl FlagInfo {
@@ -175,4 +181,41 @@ impl FlagInfo {
 
         result
     }
+}
+
+#[test]
+fn test_flags() {
+    let flags = load_bazel_flags();
+    let commands = flags
+        .flags_by_commands
+        .keys()
+        .map(|s| s.clone())
+        .collect::<Vec<_>>();
+    assert!(commands.contains(&"build".to_string()));
+    assert!(commands.contains(&"clean".to_string()));
+    assert!(commands.contains(&"test".to_string()));
+    assert!(commands.contains(&"common".to_string()));
+
+    // Can lookup a flag by its invocation
+    let preemptible_info = flags.get_by_invocation("--preemptible");
+    assert_eq!(
+        preemptible_info
+            .unwrap()
+            .commands
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>(),
+        vec!("startup")
+    );
+
+    // Supports both short and long forms
+    assert_eq!(
+        flags.get_by_invocation("-k"),
+        flags.get_by_invocation("--keep_going")
+    );
+
+    // The `remote_cache` is valid for at least one command. Hence, it should be in `common`.
+    let build_flag_id = flags.flags.iter().position(|f| f.name == "remote_cache").unwrap();
+    assert!(flags.flags_by_commands.get("common").unwrap().contains(&build_flag_id));
+    assert!(flags.flags_by_commands.get("always").unwrap().contains(&build_flag_id));
 }

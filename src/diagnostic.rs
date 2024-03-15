@@ -53,12 +53,16 @@ pub fn diagnostics_from_rcconfig(
 
     for l in lines {
         if let Some((command, span)) = &l.command {
-            let flags_for_command = bazel_flags.flags_by_commands.get(command);
-            if flags_for_command.is_none() {
-                diagnostics.push(Diagnostic::new_simple(
-                    range_to_lsp(rope, span).unwrap(),
-                    format!("unknown command {:?}", command),
-                ));
+            if command == "import" || command == "try-import" {
+                // TODO check that the imported file exists.
+            } else {
+                let flags_for_command = bazel_flags.flags_by_commands.get(command);
+                if flags_for_command.is_none() {
+                    diagnostics.push(Diagnostic::new_simple(
+                        range_to_lsp(rope, span).unwrap(),
+                        format!("unknown command {:?}", command),
+                    ));
+                }
             }
         } else if !l.flags.is_empty() {
             diagnostics.push(Diagnostic::new_simple(

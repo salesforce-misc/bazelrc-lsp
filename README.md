@@ -33,6 +33,9 @@ Contributions are welcome. Feel free to just open a pull request.
     * values based on previously observed values
   * auto-complete based on category / tags
 * Format / pretty print
+* `import` support
+  * link file names
+  * diagnose if file is not found
 * Rename functionality for config names
 * References: Find other usages of same flag
 * `import` support
