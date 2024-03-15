@@ -11,7 +11,7 @@ fn complete_bazel_command(bazel_flags: &BazelFlags) -> Vec<CompletionItem> {
         .iter()
         .map(|cmd| CompletionItem {
             label: cmd.clone(),
-            commit_characters: Some(vec![':'.to_string(), ' '.to_string()]),
+            commit_characters: Some(vec![':'.to_string()]),
             documentation: get_command_documentation(cmd),
             ..Default::default()
         })
@@ -43,11 +43,18 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
 
     // The Bazel flags themselves...
     let mut completion_items: Vec<CompletionItem> = Vec::<CompletionItem>::new();
-    completion_items.extend(relevant_flags.clone().map(|flag| CompletionItem {
-        label: flag.name.clone(),
-        documentation: get_flag_documentation(flag),
-        commit_characters: Some(vec!['='.to_string(), ' '.to_string()]),
-        ..Default::default()
+    completion_items.extend(relevant_flags.clone().map(|flag| {
+        let label = if flag.requires_value() {
+            format!("{}=", flag.name)
+        } else {
+            flag.name.to_string()
+        };
+        CompletionItem {
+            label: label,
+            documentation: get_flag_documentation(flag),
+            commit_characters: Some(vec!['='.to_string()]),
+            ..Default::default()
+        }
     }));
 
     // ... and their negations
@@ -57,7 +64,7 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
             .map(|flag| CompletionItem {
                 label: format!("no{}", flag.name.clone()),
                 documentation: get_flag_documentation(flag),
-                commit_characters: Some(vec!['='.to_string(), ' '.to_string()]),
+                commit_characters: Some(vec!['='.to_string()]),
                 ..Default::default()
             }),
     );
