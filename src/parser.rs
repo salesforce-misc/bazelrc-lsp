@@ -10,6 +10,8 @@ pub struct Line {
     pub config: Option<Spanned<String>>,
     pub flags: Vec<Spanned<String>>,
     pub comment: Option<Spanned<String>>,
+    // The span of this line (without the comment)
+    pub span: Span,
 }
 
 // Tokenizer and parser for bazelrc files.
@@ -124,14 +126,16 @@ pub fn parser() -> impl Parser<char, Vec<Line>, Error = Simple<char>> {
     let line_content = command_specifier
         .or_not()
         .then(flags_list)
+        .map_with_span(|v, s| (v, s))
         .then(comment.or_not())
-        .map(|((command_config, tokens), comment)| {
+        .map(|(((command_config, tokens), span), comment)| {
             let (command, config) = command_config.unzip();
             Line {
                 command,
                 config: config.flatten(),
                 flags: tokens,
                 comment,
+                span,
             }
         });
 

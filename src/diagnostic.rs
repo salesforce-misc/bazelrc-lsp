@@ -60,6 +60,11 @@ pub fn diagnostics_from_rcconfig(
                     format!("unknown command `{:?}`", command),
                 ));
             }
+        } else if !l.flags.is_empty() {
+            diagnostics.push(Diagnostic::new_simple(
+                range_to_lsp(rope, &l.span).unwrap(),
+                "missing command".to_string(),
+            ));
         }
     }
     diagnostics
