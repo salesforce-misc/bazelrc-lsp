@@ -9,8 +9,8 @@ use crate::{
 pub enum IndexEntryKind {
     Command,
     Config,
-    FlagValue(usize),
     FlagName(usize),
+    FlagValue(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,7 +86,8 @@ impl IndexedLines {
     }
 
     pub fn find_line_at_position(&self, pos: usize) -> Option<&Line> {
-        self.find_linenr_at_position(pos).and_then(|i| self.lines.get(i))
+        self.find_linenr_at_position(pos)
+            .and_then(|i| self.lines.get(i))
     }
 
     pub fn find_symbol_at_position(&self, pos: usize) -> Option<&IndexEntry> {
@@ -117,6 +118,7 @@ build:opt --upload_results=false
 
     assert_eq!(index.find_linenr_at_position(0), Some(0));
     assert_eq!(index.find_linenr_at_position(1), Some(0));
+    assert_eq!(index.find_linenr_at_position(8), Some(0));
     assert_eq!(index.find_linenr_at_position(9), Some(1));
     assert_eq!(index.find_linenr_at_position(10), Some(1));
     assert_eq!(index.find_linenr_at_position(40), Some(1));

@@ -27,9 +27,10 @@ Contributions are welcome. Feel free to just open a pull request.
 * Autocomplete
   * ✔ basic auto-complete
   * context-aware auto-complete
-    * flags
-    * command names
-    * config names
+    * ✔ flags
+    * ✔ command names
+    * config names based on other config names
+    * values based on previously observed values
   * auto-complete based on category / tags
 * Format / pretty print
 * Rename functionality for config names

@@ -167,8 +167,19 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let text_document_position = params.text_document_position;
+        let uri = text_document_position.text_document.uri.to_string();
+        let doc = self
+            .document_map
+            .get(&uri)
+            .ok_or(Error::invalid_params("Unknown document!"))?;
+        let pos = lsp_pos_to_offset(&doc.rope, &text_document_position.position)
+            .ok_or(Error::invalid_params("Position out of range"))?;
+
         Ok(Some(CompletionResponse::Array(get_completion_items(
             &self.bazel_flags,
+            &doc.indexed_lines,
+            pos,
         ))))
     }
 

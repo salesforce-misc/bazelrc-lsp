@@ -98,7 +98,7 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
             }
             Token::Newline => {
                 if let Some(mut l) = current_line.take() {
-                    l.span = current_line_start..t.1.start;
+                    l.span = current_line_start..t.1.end;
                     result_lines.push(l);
                 }
                 current_line_start = t.1.end;
@@ -107,7 +107,8 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
         };
     }
     if let Some(mut l) = current_line.take() {
-        l.span = current_line_start..orig.len();
+        let implicit_final_newline = orig.chars().count();
+        l.span = current_line_start..implicit_final_newline;
         result_lines.push(l);
     }
 
@@ -267,7 +268,7 @@ fn test_comments() {
         vec!(
             Line {
                 comment: Some((" my comment".to_string(), 1..13)),
-                span: 0..13,
+                span: 0..14,
                 ..Default::default()
             },
             Line {
