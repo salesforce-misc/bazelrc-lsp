@@ -20,6 +20,9 @@ impl FlagInfo {
         if let Some(abbr) = &self.abbreviation {
             result += format!(" [`-{}`]", abbr).as_str();
         }
+        if self.has_negative_flag() {
+            result += format!(", `--no{}`", self.name).as_str();
+        }
         // Followed by the documentation text
         if let Some(doc) = &self.documentation {
             result += "\n\n";
