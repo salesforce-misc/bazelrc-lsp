@@ -100,7 +100,7 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
                     result_lines.push(l);
                 }
             }
-            Token::EscapedNewline => ()
+            Token::EscapedNewline => (),
         };
     }
     if let Some(l) = current_line.take() {

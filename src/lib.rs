@@ -1,4 +1,5 @@
 pub mod bazel_flags;
+pub mod completion;
 pub mod diagnostic;
 pub mod lsp_utils;
 pub mod parser;

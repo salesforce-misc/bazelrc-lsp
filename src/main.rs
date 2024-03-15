@@ -1,4 +1,5 @@
 use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags};
+use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use bazelrc_lsp::parser::{parse_from_str, ParserResult};
 use bazelrc_lsp::semantic_token::{
@@ -97,6 +98,10 @@ impl LanguageServer for Backend {
                         },
                     ),
                 ),
+                completion_provider: Some(CompletionOptions {
+                    trigger_characters: Some(vec!["-".to_string()]),
+                    ..Default::default()
+                }),
                 ..ServerCapabilities::default()
             },
         })
@@ -155,6 +160,12 @@ impl LanguageServer for Backend {
             })));
         }
         Ok(None)
+    }
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        Ok(Some(CompletionResponse::Array(get_completion_items(
+            &self.bazel_flags,
+        ))))
     }
 }
 
