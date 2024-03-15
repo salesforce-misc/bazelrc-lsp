@@ -19,16 +19,28 @@ fn get_documentation_string(flag: &FlagInfo) -> Option<Documentation> {
     result += "\n\n";
     if !flag.effect_tags.is_empty() {
         result += "Effect tags: ";
-        result += flag.effect_tags.join(", ").as_str();
+        result += flag
+            .effect_tags
+            .iter()
+            .map(|t| t.to_lowercase())
+            .collect::<Vec<_>>()
+            .join(", ")
+            .as_str();
         result += "\n";
     }
     if !flag.metadata_tags.is_empty() {
         result += "Tags: ";
-        result += flag.metadata_tags.join(", ").as_str();
+        result += flag
+            .metadata_tags
+            .iter()
+            .map(|t| t.to_lowercase())
+            .collect::<Vec<_>>()
+            .join(", ")
+            .as_str();
         result += "\n";
     }
     if let Some(catgegory) = &flag.documentation_category {
-        result += format!("Category: {}\n", catgegory).as_str();
+        result += format!("Category: {}\n", catgegory.to_lowercase()).as_str();
     }
 
     //let docs = flag.documentation.as_ref()?;
@@ -49,8 +61,18 @@ pub fn get_completion_items(bazel_flags: &BazelFlags) -> Vec<CompletionItem> {
             }),
     );
 
+    let documented_flags = bazel_flags.flags.iter().filter(|f| {
+        if f.effect_tags.contains(&"NO_OP".to_string()) {
+            return false;
+        }
+        if f.documentation_category == Some("UNDOCUMENTED".to_string()) {
+            return false;
+        }
+        return true;
+    });
+
     // All the Bazel flags
-    completion_items.extend(bazel_flags.flags.iter().map(|flag| CompletionItem {
+    completion_items.extend(documented_flags.clone().map(|flag| CompletionItem {
         label: flag.name.clone(),
         documentation: get_documentation_string(flag),
         commit_characters: Some(vec!['='.to_string(), ' '.to_string()]),
@@ -59,9 +81,7 @@ pub fn get_completion_items(bazel_flags: &BazelFlags) -> Vec<CompletionItem> {
 
     // All the negated Bazel flags
     completion_items.extend(
-        bazel_flags
-            .flags
-            .iter()
+        documented_flags
             .filter(|flag| flag.has_negative_flag())
             .map(|flag| CompletionItem {
                 label: format!("no{}", flag.name.clone()),

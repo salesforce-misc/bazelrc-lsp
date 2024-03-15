@@ -22,9 +22,11 @@ Contributions are welcome. Feel free to just open a pull request.
   * repeated args
 * Show documentation of flags on hover
 * Autocomplete
-  * flags
-  * command names
-  * config names
+  * ✔ basic auto-complete
+  * context-aware auto-complete
+    * flags
+    * command names
+    * config names
 * Format / pretty print
 * Rename functionality for config names
 * `import` support
