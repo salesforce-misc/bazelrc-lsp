@@ -24,6 +24,7 @@ Contributions are welcome. Feel free to just open a pull request.
   * configs on `startup`, `import`, `try-import`; including fix
   * empty config name; including fix
   * config name which doesn't match `[a-z_\-]+`
+  * abbreviated commands; prefer full commands
 * ✔ Hover
   * ✔ Show documentation of flags on hover
   * ✔ Show documentation for commands on hover
@@ -45,3 +46,6 @@ Contributions are welcome. Feel free to just open a pull request.
 * References:
   * other usages of config name
   * Find other usages of same flag
+* Bazel version support
+  * pack multiple flag versions & allow selection via flag
+  * run `bazel help flags-as-proto` at runtime

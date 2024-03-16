@@ -4,7 +4,7 @@ import os
 import base64 
 
 bazelisk = shutil.which("bazel")
-os.makedirs("flag-dumps", exist_ok=True)
+os.makedirs("proto/flag-dumps", exist_ok=True)
 
 def dump_flags(version):
     result = subprocess.run(
@@ -16,7 +16,7 @@ def dump_flags(version):
     if result.returncode != 0:
         raise Exception(result.stderr)
     bytes = base64.b64decode(result.stdout)
-    with open(f"flag-dumps/{version}.data", "wb") as f:
+    with open(f"proto/flag-dumps/{version}.data", "wb") as f:
         f.write(bytes)
 
 # dump_flags("6.0.0")

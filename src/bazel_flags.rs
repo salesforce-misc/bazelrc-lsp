@@ -127,7 +127,7 @@ impl BazelFlags {
 }
 
 pub fn load_bazel_flags() -> BazelFlags {
-    let proto_bytes = include_bytes!("../flag-dumps/7.1.0.data");
+    let proto_bytes = include_bytes!("../proto/flag-dumps/7.1.0.data");
     let flags = FlagCollection::decode(&mut Cursor::new(proto_bytes))
         .unwrap()
         .flag_infos;
