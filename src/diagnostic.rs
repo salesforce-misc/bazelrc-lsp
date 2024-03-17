@@ -60,16 +60,47 @@ pub fn diagnostics_from_rcconfig(
                 if flags_for_command.is_none() {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, span).unwrap(),
-                        format!("unknown command {:?}", command),
+                        format!("Unknown command {:?}", command),
                     ));
                 }
             }
         } else if !l.flags.is_empty() {
             diagnostics.push(Diagnostic::new_simple(
                 range_to_lsp(rope, &l.span).unwrap(),
-                "missing command".to_string(),
+                "Missing command".to_string(),
             ));
         }
     }
     diagnostics
+}
+
+#[cfg(test)]
+fn diagnose_string(str: &str) -> Vec<String> {
+    use crate::bazel_flags::load_bazel_flags;
+    use crate::parser::parse_from_str;
+    use crate::parser::ParserResult;
+
+    let rope = Rope::from_str(str);
+    let ParserResult {
+        tokens: _,
+        lines,
+        errors,
+    } = parse_from_str(str);
+    assert!(errors.is_empty());
+
+    let bazel_flags = load_bazel_flags();
+    return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags)
+        .iter_mut()
+        .map(|d| std::mem::take(&mut d.message))
+        .collect::<Vec<_>>();
+}
+
+#[test]
+fn test_diagnose_commands() {
+    // Nothing wrong with this `build` command
+    assert_eq!(diagnose_string("build --upload_results=false"), Vec::<&str>::new());
+    // The command should be named `build`, not `built`
+    assert_eq!(diagnose_string("built --upload_results=false"), vec!["Unknown command \"built\""]);
+    // Completely missing command
+    assert_eq!(diagnose_string("--upload_results=false"), vec!["Missing command"]);
 }
