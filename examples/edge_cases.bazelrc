@@ -12,6 +12,8 @@ buil"d:my"config --flag
 build: --flag
 build:my\ -config --flag
 
+build --remote_upload_local_results
+
 # `common` and `alway` are special cases for bazelrc files
 common --flag
 always --flag2

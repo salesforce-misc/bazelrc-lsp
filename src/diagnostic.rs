@@ -44,6 +44,27 @@ pub fn diagnostics_from_parser<'a>(
     })
 }
 
+pub fn diagnostics_for_flags(
+    rope: &Rope,
+    line: &Line,
+    bazel_flags: &BazelFlags,
+) -> Vec<Diagnostic> {
+    let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
+    for flag in &line.flags {
+        if let Some(name) = &flag.name {
+            if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
+                // TODO: Check if valid for this command
+            } else {
+                diagnostics.push(Diagnostic::new_simple(
+                    range_to_lsp(rope, &name.1).unwrap(),
+                    format!("Unknown flag {:?}", name.0),
+                ))
+            }
+        }
+    }
+    diagnostics
+}
+
 pub fn diagnostics_from_rcconfig(
     rope: &Rope,
     lines: &[Line],
@@ -56,8 +77,9 @@ pub fn diagnostics_from_rcconfig(
             if command == "import" || command == "try-import" {
                 // TODO check that the imported file exists.
             } else {
-                let flags_for_command = bazel_flags.flags_by_commands.get(command);
-                if flags_for_command.is_none() {
+                if let Some(_) = bazel_flags.flags_by_commands.get(command) {
+                    diagnostics.extend(diagnostics_for_flags(rope, l,  bazel_flags))
+                } else {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, span).unwrap(),
                         format!("Unknown command {:?}", command),
@@ -98,9 +120,15 @@ fn diagnose_string(str: &str) -> Vec<String> {
 #[test]
 fn test_diagnose_commands() {
     // Nothing wrong with this `build` command
-    assert_eq!(diagnose_string("build --upload_results=false"), Vec::<&str>::new());
+    assert_eq!(diagnose_string("build --remote_upload_local_results=false"), Vec::<&str>::new());
     // The command should be named `build`, not `built`
-    assert_eq!(diagnose_string("built --upload_results=false"), vec!["Unknown command \"built\""]);
+    assert_eq!(diagnose_string("built --remote_upload_local_results=false"), vec!["Unknown command \"built\""]);
     // Completely missing command
-    assert_eq!(diagnose_string("--upload_results=false"), vec!["Missing command"]);
+    assert_eq!(diagnose_string("--remote_upload_local_results=false"), vec!["Missing command"]);
+}
+
+#[test]
+fn test_diagnose_flags() {
+    // Diagnose unknown flags
+    assert_eq!(diagnose_string("build --my_flag"), vec!["Unknown flag \"--my_flag\""]);
 }
