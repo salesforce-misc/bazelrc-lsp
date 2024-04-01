@@ -46,7 +46,7 @@ fn split_token(
 }
 
 fn parse_flag(str: &str, span: &Span, orig: &str) -> Flag {
-    if str.starts_with("-") {
+    if str.starts_with('-') {
         // This is flag. Try to split at `=`
         if let Some((name, value)) = split_token(str, span, orig, '=') {
             Flag {
@@ -76,7 +76,7 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
     for t in tokens {
         match &t.0 {
             Token::Token(s) => {
-                let line = current_line.get_or_insert_with(|| Default::default());
+                let line = current_line.get_or_insert_with(Default::default);
                 // The first token is the command name
                 if line.command.is_none() && line.flags.is_empty() && !s.starts_with('-') {
                     if let Some((command, config)) = split_token(s, &t.1, orig, ':') {
@@ -92,11 +92,11 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
                     }
                 } else {
                     // All other tokens are flags
-                    line.flags.push(parse_flag(s, &t.1, &orig));
+                    line.flags.push(parse_flag(s, &t.1, orig));
                 }
             }
             Token::Comment(s) => {
-                let line = current_line.get_or_insert_with(|| Default::default());
+                let line = current_line.get_or_insert_with(Default::default);
                 assert!(line.comment.is_none());
                 line.comment = Some((s.clone(), t.1.clone()));
             }

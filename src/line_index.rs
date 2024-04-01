@@ -73,7 +73,7 @@ impl IndexedLines {
         self.reverse_line_idx
             .values()
             .find(|e| self.lines[**e].span.contains(&pos))
-            .map(|e| *e)
+            .copied()
         /* TODO use 'upper_bound'
         self.reverse_idx
             .upper_bound(Bound::Included(&pos))

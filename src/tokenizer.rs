@@ -90,7 +90,7 @@ pub fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char
     let comment = just('#')
         .ignore_then(escaped_newline_raw.or(one_of("\n\r").not()).repeated())
         .collect::<String>()
-        .map(|v| Token::Comment(v));
+        .map(Token::Comment);
 
     // Detect `command` and `command:config` in the beginnig of a line
     let token = choice((comment, escaped_newline, newline, mixed_token))

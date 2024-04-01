@@ -207,14 +207,14 @@ impl LanguageServer for Backend {
 
                     line.command
                         .as_ref()
-                        .and_then(|cmd| COMMAND_DOCS.get(&cmd.0.as_str()))
-                        .and_then(|docs| {
+                        .and_then(|cmd| COMMAND_DOCS.get(cmd.0.as_str()))
+                        .map(|docs| {
                             let contents =
                                 HoverContents::Scalar(MarkedString::String(docs.to_string()));
-                            Some(Hover {
+                            Hover {
                                 contents,
                                 range: range_to_lsp(&doc.rope, span),
-                            })
+                            }
                         })
                 }
                 IndexEntryKind::Config => None,

@@ -53,7 +53,7 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
             if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
                 if command != "common"
                     && command != "always"
-                    && !flag_description.commands.contains(&command)
+                    && !flag_description.commands.contains(command)
                 {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, &name.1).unwrap(),
@@ -84,15 +84,13 @@ pub fn diagnostics_from_rcconfig(
         if let Some((command, span)) = &l.command {
             if command == "import" || command == "try-import" {
                 // TODO check that the imported file exists.
+            } else if bazel_flags.flags_by_commands.get(command).is_some() {
+                diagnostics.extend(diagnostics_for_flags(rope, l, bazel_flags))
             } else {
-                if let Some(_) = bazel_flags.flags_by_commands.get(command) {
-                    diagnostics.extend(diagnostics_for_flags(rope, l, bazel_flags))
-                } else {
-                    diagnostics.push(Diagnostic::new_simple(
-                        range_to_lsp(rope, span).unwrap(),
-                        format!("Unknown command {:?}", command),
-                    ));
-                }
+                diagnostics.push(Diagnostic::new_simple(
+                    range_to_lsp(rope, span).unwrap(),
+                    format!("Unknown command {:?}", command),
+                ));
             }
         } else if !l.flags.is_empty() {
             diagnostics.push(Diagnostic::new_simple(
@@ -106,20 +104,20 @@ pub fn diagnostics_from_rcconfig(
             if config_name.is_empty() {
                 // Empty config names make no sense
                 diagnostics.push(Diagnostic::new_simple(
-                    range_to_lsp(rope, &span).unwrap(),
+                    range_to_lsp(rope, span).unwrap(),
                     "Empty configuration names are pointless".to_string(),
                 ));
             } else if !config_regex.is_match(config_name) {
                 // Overly complex config names
                 diagnostics.push(Diagnostic::new_simple(
-                    range_to_lsp(rope, &span).unwrap(),
+                    range_to_lsp(rope, span).unwrap(),
                     "Overly complicated config name. Config names should consist only of lower-case ASCII characters.".to_string(),
                 ));
             }
             if let Some((command, span)) = &l.command {
-                if vec!["startup", "import", "try-import"].contains(&command.as_str()) {
+                if ["startup", "import", "try-import"].contains(&command.as_str()) {
                     diagnostics.push(Diagnostic::new_simple(
-                        range_to_lsp(rope, &span).unwrap(),
+                        range_to_lsp(rope, span).unwrap(),
                         format!(
                             "Configuration names not supported on {:?} commands",
                             command

@@ -52,11 +52,9 @@ impl BazelFlags {
         let mut flags_by_commands = HashMap::<String, Vec<usize>>::new();
         let mut flags_by_name = HashMap::<String, usize>::new();
         let mut flags_by_abbreviation = HashMap::<String, usize>::new();
-        for (i, f) in (&flags).iter().enumerate() {
+        for (i, f) in flags.iter().enumerate() {
             for c in &f.commands {
-                let list = flags_by_commands
-                    .entry(c.clone())
-                    .or_insert_with(|| Default::default());
+                let list = flags_by_commands.entry(c.clone()).or_default();
                 list.push(i);
             }
             flags_by_name.insert(f.name.clone(), i);
@@ -69,7 +67,7 @@ impl BazelFlags {
         let mut common_flags = flags_by_commands
             .values()
             .flatten()
-            .map(|v| *v)
+            .copied()
             .collect::<Vec<_>>();
         common_flags.sort();
         common_flags.dedup();
@@ -82,26 +80,23 @@ impl BazelFlags {
         flags_by_commands.insert("always".to_string(), common_flags);
 
         // Determine the list of supported commands
-        let mut commands = flags_by_commands
-            .keys()
-            .map(|k| k.clone())
-            .collect::<Vec<_>>();
+        let mut commands = flags_by_commands.keys().cloned().collect::<Vec<_>>();
         commands.extend(["import".to_string(), "try-import".to_string()]);
 
-        return BazelFlags {
+        BazelFlags {
             commands,
             flags,
             flags_by_commands,
             flags_by_name,
             flags_by_abbreviation,
-        };
+        }
     }
 
     pub fn get_by_invocation(&self, s: &str) -> Option<&FlagInfo> {
-        let stripped = s.strip_suffix("=").unwrap_or(s);
+        let stripped = s.strip_suffix('=').unwrap_or(s);
         // Long names
         if let Some(long_name) = stripped.strip_prefix("--") {
-            if long_name.starts_with("-") {
+            if long_name.starts_with('-') {
                 return None;
             }
             return self
@@ -110,8 +105,8 @@ impl BazelFlags {
                 .map(|i| self.flags.get(*i).unwrap());
         }
         // Short names
-        if let Some(abbreviation) = stripped.strip_prefix("-") {
-            if abbreviation.starts_with("-") {
+        if let Some(abbreviation) = stripped.strip_prefix('-') {
+            if abbreviation.starts_with('-') {
                 return None;
             }
             return self
@@ -128,7 +123,7 @@ pub fn load_bazel_flags() -> BazelFlags {
     let flags = FlagCollection::decode(&mut Cursor::new(proto_bytes))
         .unwrap()
         .flag_infos;
-    return BazelFlags::from_flags(flags);
+    BazelFlags::from_flags(flags)
 }
 
 impl FlagInfo {
@@ -183,11 +178,7 @@ impl FlagInfo {
 #[test]
 fn test_flags() {
     let flags = load_bazel_flags();
-    let commands = flags
-        .flags_by_commands
-        .keys()
-        .map(|s| s.clone())
-        .collect::<Vec<_>>();
+    let commands = flags.flags_by_commands.keys().cloned().collect::<Vec<_>>();
     assert!(commands.contains(&"build".to_string()));
     assert!(commands.contains(&"clean".to_string()));
     assert!(commands.contains(&"test".to_string()));

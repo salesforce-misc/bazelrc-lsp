@@ -38,7 +38,7 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
             if f.documentation_category == Some("UNDOCUMENTED".to_string()) {
                 return false;
             }
-            return true;
+            true
         });
 
     // The Bazel flags themselves...
@@ -50,7 +50,7 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
             flag.name.to_string()
         };
         CompletionItem {
-            label: label,
+            label,
             documentation: get_flag_documentation(flag),
             commit_characters: Some(vec!['='.to_string()]),
             ..Default::default()
@@ -69,7 +69,7 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
             }),
     );
 
-    return completion_items;
+    completion_items
 }
 
 pub fn get_completion_items(
@@ -123,11 +123,10 @@ fn get_flag_documentation(flag: &crate::bazel_flags_proto::FlagInfo) -> Option<D
 }
 
 fn get_command_documentation(command: &str) -> Option<Documentation> {
-    COMMAND_DOCS.get(command).and_then(|docs| {
-        let mc = MarkupContent {
+    COMMAND_DOCS.get(command).map(|docs| {
+        Documentation::MarkupContent(MarkupContent {
             kind: MarkupKind::Markdown,
             value: docs.to_string(),
-        };
-        Some(Documentation::MarkupContent(mc))
+        })
     })
 }
