@@ -1,7 +1,7 @@
 use chumsky::error::Simple;
 use regex::Regex;
 use ropey::Rope;
-use tower_lsp::lsp_types::Diagnostic;
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticTag};
 
 use crate::{bazel_flags::BazelFlags, lsp_utils::range_to_lsp, parser::Line};
 
@@ -51,16 +51,27 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
     for flag in &line.flags {
         if let Some(name) = &flag.name {
             if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
+                // Diagnose flags used on the wrong command
                 if command != "common"
                     && command != "always"
                     && !flag_description.commands.contains(command)
                 {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, &name.1).unwrap(),
-                        format!("Flag {:?} is not supported for {:?}. It is supported for {:?} commands, though.", name.0, command, flag_description.commands),
+                        format!("The flag {:?} is not supported for {:?}. It is supported for {:?} commands, though.", name.0, command, flag_description.commands),
                     ))
                 }
+                // Diagnose deprecated options
+                if flag_description.metadata_tags.contains(&"DEPRECATED".to_string()) {
+                    diagnostics.push(Diagnostic {
+                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        message: format!("The flag {:?} is deprecated.", name.0),
+                        tags: Some(vec![DiagnosticTag::DEPRECATED]),
+                        ..Default::default()
+                    });
+                }
             } else {
+                // Diagnose unknown flags
                 diagnostics.push(Diagnostic::new_simple(
                     range_to_lsp(rope, &name.1).unwrap(),
                     format!("Unknown flag {:?}", name.0),
@@ -179,13 +190,13 @@ fn test_diagnose_commands() {
 fn test_diagnose_config_names() {
     // Diagnose empty config names
     assert_eq!(
-        diagnose_string("build: --watchfs"),
+        diagnose_string("build: --disk_cache="),
         vec!["Empty configuration names are pointless"]
     );
 
     // Diagnose config names on commands which don't support configs
     assert_eq!(
-        diagnose_string("startup:opt --watchfs"),
+        diagnose_string("startup:opt --digest_function=blake3"),
         vec!["Configuration names not supported on \"startup\" commands"]
     );
     assert_eq!(
@@ -245,6 +256,11 @@ fn test_diagnose_flags() {
     // Diagnose flags which are applied for the wrong command
     assert_eq!(
         diagnose_string("startup --disk_cache="),
-        vec!["Flag \"--disk_cache\" is not supported for \"startup\". It is supported for [\"analyze-profile\", \"aquery\", \"build\", \"canonicalize-flags\", \"clean\", \"config\", \"coverage\", \"cquery\", \"dump\", \"fetch\", \"help\", \"info\", \"license\", \"mobile-install\", \"mod\", \"print_action\", \"query\", \"run\", \"shutdown\", \"sync\", \"test\", \"vendor\", \"version\"] commands, though."]
+        vec!["The flag \"--disk_cache\" is not supported for \"startup\". It is supported for [\"analyze-profile\", \"aquery\", \"build\", \"canonicalize-flags\", \"clean\", \"config\", \"coverage\", \"cquery\", \"dump\", \"fetch\", \"help\", \"info\", \"license\", \"mobile-install\", \"mod\", \"print_action\", \"query\", \"run\", \"shutdown\", \"sync\", \"test\", \"vendor\", \"version\"] commands, though."]
+    );
+    // Diagnose deprecated flags
+    assert_eq!(
+        diagnose_string("common --expand_configs_in_place"),
+        vec!["The flag \"--expand_configs_in_place\" is deprecated."]
     );
 }

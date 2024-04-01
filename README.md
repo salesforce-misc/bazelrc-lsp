@@ -23,7 +23,8 @@ Contributions are welcome. Feel free to just open a pull request.
   * allow custom setting args (`--//my/package:setting` and `--no//my/package:setting`)
   * repeated args
   * abbreviated flag names; prefer full flags
-  * deprecated flags; offering a fix for no-op flags
+  * ✔ diagnose deprecated flags
+  * offer a fix fix for deprecated no-op flags to remove the flag
   * ✔ configs on `startup`, `import`, `try-import`
   * ✔ empty config name
   * ✔ config name which doesn't match `[a-z_\-]+` (or similar)
