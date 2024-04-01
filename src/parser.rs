@@ -80,7 +80,11 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
                 // The first token is the command name
                 if line.command.is_none() && line.flags.is_empty() && !s.starts_with('-') {
                     if let Some((command, config)) = split_token(s, &t.1, orig, ':') {
-                        line.command = if command.0.is_empty() { None } else { Some(command) };
+                        line.command = if command.0.is_empty() {
+                            None
+                        } else {
+                            Some(command)
+                        };
                         line.config = Some(config);
                     } else {
                         line.command = Some((s.clone(), t.1.clone()));
@@ -199,19 +203,17 @@ fn test_command_specifier() {
             ..Default::default()
         })
     );
-    
+
     // Parse something useful if the leading command name is missing, but a config name is provided
     assert_eq!(
         parse_from_str(":opt --x").lines,
         vec!(Line {
             command: None,
             config: Some(("opt".to_string(), 0..4)),
-            flags: vec!(
-                Flag {
-                    name: Some(("--x".to_string(), 5..8)),
-                    value: None
-                },
-            ),
+            flags: vec!(Flag {
+                name: Some(("--x".to_string(), 5..8)),
+                value: None
+            },),
             span: 0..8,
             ..Default::default()
         })

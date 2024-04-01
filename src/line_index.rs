@@ -1,9 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{
-    parser::Line,
-    tokenizer::Span,
-};
+use crate::{parser::Line, tokenizer::Span};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IndexEntryKind {

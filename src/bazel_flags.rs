@@ -1,9 +1,6 @@
 use phf::phf_map;
 use prost::Message;
-use std::{
-    collections::HashMap,
-    io::Cursor,
-};
+use std::{collections::HashMap, io::Cursor};
 
 use crate::bazel_flags_proto::{FlagCollection, FlagInfo};
 
@@ -215,7 +212,19 @@ fn test_flags() {
     );
 
     // The `remote_cache` is valid for at least one command. Hence, it should be in `common`.
-    let build_flag_id = flags.flags.iter().position(|f| f.name == "remote_cache").unwrap();
-    assert!(flags.flags_by_commands.get("common").unwrap().contains(&build_flag_id));
-    assert!(flags.flags_by_commands.get("always").unwrap().contains(&build_flag_id));
+    let build_flag_id = flags
+        .flags
+        .iter()
+        .position(|f| f.name == "remote_cache")
+        .unwrap();
+    assert!(flags
+        .flags_by_commands
+        .get("common")
+        .unwrap()
+        .contains(&build_flag_id));
+    assert!(flags
+        .flags_by_commands
+        .get("always")
+        .unwrap()
+        .contains(&build_flag_id));
 }
