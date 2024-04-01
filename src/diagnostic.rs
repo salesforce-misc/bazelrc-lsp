@@ -1,7 +1,7 @@
 use chumsky::error::Simple;
+use regex::Regex;
 use ropey::Rope;
 use tower_lsp::lsp_types::Diagnostic;
-use regex::Regex;
 
 use crate::{bazel_flags::BazelFlags, lsp_utils::range_to_lsp, parser::Line};
 
@@ -45,16 +45,21 @@ pub fn diagnostics_from_parser<'a>(
     })
 }
 
-pub fn diagnostics_for_flags(
-    rope: &Rope,
-    line: &Line,
-    bazel_flags: &BazelFlags,
-) -> Vec<Diagnostic> {
+fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
+    let command = &line.command.as_ref().unwrap().0;
     for flag in &line.flags {
         if let Some(name) = &flag.name {
             if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
-                // TODO: Check if valid for this command
+                if command != "common"
+                    && command != "always"
+                    && !flag_description.commands.contains(&command)
+                {
+                    diagnostics.push(Diagnostic::new_simple(
+                        range_to_lsp(rope, &name.1).unwrap(),
+                        format!("Flag {:?} is not supported for {:?}. It is supported for {:?} commands, though.", name.0, command, flag_description.commands),
+                    ))
+                }
             } else {
                 diagnostics.push(Diagnostic::new_simple(
                     range_to_lsp(rope, &name.1).unwrap(),
@@ -81,7 +86,7 @@ pub fn diagnostics_from_rcconfig(
                 // TODO check that the imported file exists.
             } else {
                 if let Some(_) = bazel_flags.flags_by_commands.get(command) {
-                    diagnostics.extend(diagnostics_for_flags(rope, l,  bazel_flags))
+                    diagnostics.extend(diagnostics_for_flags(rope, l, bazel_flags))
                 } else {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, span).unwrap(),
@@ -115,7 +120,10 @@ pub fn diagnostics_from_rcconfig(
                 if vec!["startup", "import", "try-import"].contains(&command.as_str()) {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, &span).unwrap(),
-                        format!("Configuration names not supported on {:?} commands", command),
+                        format!(
+                            "Configuration names not supported on {:?} commands",
+                            command
+                        ),
                     ));
                 }
             }
@@ -148,41 +156,97 @@ fn diagnose_string(str: &str) -> Vec<String> {
 #[test]
 fn test_diagnose_commands() {
     // Nothing wrong with this `build` command
-    assert_eq!(diagnose_string("build --remote_upload_local_results=false"), Vec::<&str>::new());
+    assert_eq!(
+        diagnose_string("build --remote_upload_local_results=false"),
+        Vec::<&str>::new()
+    );
     // The command should be named `build`, not `built`
-    assert_eq!(diagnose_string("built --remote_upload_local_results=false"), vec!["Unknown command \"built\""]);
+    assert_eq!(
+        diagnose_string("built --remote_upload_local_results=false"),
+        vec!["Unknown command \"built\""]
+    );
     // Completely missing command
-    assert_eq!(diagnose_string("--remote_upload_local_results=false"), vec!["Missing command"]);
+    assert_eq!(
+        diagnose_string("--remote_upload_local_results=false"),
+        vec!["Missing command"]
+    );
     // Completely missing command
-    assert_eq!(diagnose_string(":opt --remote_upload_local_results=false"), vec!["Missing command"]);
+    assert_eq!(
+        diagnose_string(":opt --remote_upload_local_results=false"),
+        vec!["Missing command"]
+    );
 }
 
 #[test]
 fn test_diagnose_config_names() {
     // Diagnose empty config names
-    assert_eq!(diagnose_string("build: --watchfs"), vec!["Empty configuration names are pointless"]);
+    assert_eq!(
+        diagnose_string("build: --watchfs"),
+        vec!["Empty configuration names are pointless"]
+    );
 
     // Diagnose config names on commands which don't support configs
-    assert_eq!(diagnose_string("startup:opt --watchfs"), vec!["Configuration names not supported on \"startup\" commands"]);
-    assert_eq!(diagnose_string("import:opt \"x.bazelrc\""), vec!["Configuration names not supported on \"import\" commands"]);
-    assert_eq!(diagnose_string("try-import:opt \"x.bazelrc\""), vec!["Configuration names not supported on \"try-import\" commands"]);
+    assert_eq!(
+        diagnose_string("startup:opt --watchfs"),
+        vec!["Configuration names not supported on \"startup\" commands"]
+    );
+    assert_eq!(
+        diagnose_string("import:opt \"x.bazelrc\""),
+        vec!["Configuration names not supported on \"import\" commands"]
+    );
+    assert_eq!(
+        diagnose_string("try-import:opt \"x.bazelrc\""),
+        vec!["Configuration names not supported on \"try-import\" commands"]
+    );
 
     // Diagnose overly complicated config names
     let config_name_diag = "Overly complicated config name. Config names should consist only of lower-case ASCII characters.";
-    assert_eq!(diagnose_string("common:Uncached --disk_cache="), vec![config_name_diag]);
-    assert_eq!(diagnose_string("common:-opt --disk_cache="), vec![config_name_diag]);
-    assert_eq!(diagnose_string("common:opt- --disk_cache="), vec![config_name_diag]);
-    assert_eq!(diagnose_string("common:2opt --disk_cache="), vec![config_name_diag]);
-    assert_eq!(diagnose_string("common:opt2 --disk_cache="), Vec::<String>::new());
-    assert_eq!(diagnose_string("common:opt-2 --disk_cache="), Vec::<String>::new());
-    assert_eq!(diagnose_string("common:opt--2 --disk_cache="), vec![config_name_diag]);
+    assert_eq!(
+        diagnose_string("common:Uncached --disk_cache="),
+        vec![config_name_diag]
+    );
+    assert_eq!(
+        diagnose_string("common:-opt --disk_cache="),
+        vec![config_name_diag]
+    );
+    assert_eq!(
+        diagnose_string("common:opt- --disk_cache="),
+        vec![config_name_diag]
+    );
+    assert_eq!(
+        diagnose_string("common:2opt --disk_cache="),
+        vec![config_name_diag]
+    );
+    assert_eq!(
+        diagnose_string("common:opt2 --disk_cache="),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        diagnose_string("common:opt-2 --disk_cache="),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        diagnose_string("common:opt--2 --disk_cache="),
+        vec![config_name_diag]
+    );
     // The Bazel documentation recommends to prefix all user-specific settings with an `_`.
     // As such, config names prefixed that way shouldn't be diagnosed as errors.
-    assert_eq!(diagnose_string("common:_personal --disk_cache="), Vec::<String>::new());
+    assert_eq!(
+        diagnose_string("common:_personal --disk_cache="),
+        Vec::<String>::new()
+    );
 }
 
 #[test]
 fn test_diagnose_flags() {
     // Diagnose unknown flags
-    assert_eq!(diagnose_string("build --my_flag"), vec!["Unknown flag \"--my_flag\""]);
+    assert_eq!(
+        diagnose_string("build --unknown_flag"),
+        vec!["Unknown flag \"--unknown_flag\""]
+    );
+    // Diagnose flags which are applied for the wrong command
+    assert_eq!(
+        diagnose_string("startup --disk_cache="),
+        vec!["Flag \"--disk_cache\" is not supported for \"startup\". It is supported for [\"analyze-profile\", \"aquery\", \"build\", \"canonicalize-flags\", \"clean\", \"config\", \"coverage\", \"cquery\", \"dump\", \"fetch\", \"help\", \"info\", \"license\", \"mobile-install\", \"mod\", \"print_action\", \"query\", \"run\", \"shutdown\", \"sync\", \"test\", \"vendor\", \"version\"] commands, though."]
+    );
 }
