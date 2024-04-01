@@ -24,9 +24,9 @@ Contributions are welcome. Feel free to just open a pull request.
   * repeated args
   * abbreviated flag names; prefer full flags
   * deprecated flags; offering a fix for no-op flags
-  * configs on `startup`, `import`, `try-import`
-  * empty config name
-  * config name which doesn't match `[a-z_\-]+`
+  * ✔ configs on `startup`, `import`, `try-import`
+  * ✔ empty config name
+  * ✔ config name which doesn't match `[a-z_\-]+` (or similar)
   * include fixes for config-name-related issues
 * ✔ Hover
   * ✔ Show documentation of flags on hover

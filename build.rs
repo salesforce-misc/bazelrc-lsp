@@ -1,7 +1,7 @@
 use std::io::Result;
 
 fn main() -> Result<()> {
-    std::env::set_var("PROTOC", "/usr/local/bin/protoc");
+    std::env::set_var("PROTOC", "/usr/bin/protoc");
 
     let mut protobuf_out = std::path::PathBuf::new();
     protobuf_out.push(&std::env::var("OUT_DIR").unwrap());
