@@ -145,7 +145,7 @@ impl FlagInfo {
         // Followed by the documentation text
         if let Some(doc) = &self.documentation {
             result += "\n\n";
-            result += doc.as_str();
+            result += &doc.as_str().replace("%{product}", "Bazel");
         }
         // And a list of tags
         result += "\n\n";
