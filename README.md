@@ -34,12 +34,12 @@ Contributions are welcome. Feel free to just open a pull request.
   * ✔ Show documentation for commands on hover
 * Autocomplete
   * ✔ auto complete command names
-  * flags:
+  * flag names:
     * ✔ basic auto-complete
-    * insert trailing space where appropriate
-    * insert `--` prefix for options
-    * flag values based on available setting values (needs Bazel-side changes)
-    * flag values based on previously observed values
+    * ✔ insert `--` prefix for options
+  * flag values:
+    * based on available setting values (needs Bazel-side changes)
+    * based on previously observed values
   * config names
     * based on config names used elsewhere in the file / project
   * file names for `import` / `try-import`

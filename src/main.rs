@@ -178,6 +178,7 @@ impl LanguageServer for Backend {
 
         Ok(Some(CompletionResponse::Array(get_completion_items(
             &self.bazel_flags,
+            &doc.rope,
             &doc.indexed_lines,
             pos,
         ))))
