@@ -19,9 +19,9 @@ Contributions are welcome. Feel free to just open a pull request.
 * ✔ Syntax highlighting / semantic tokens
   * highlight deprecated options
 * Diagnose
-  * ✔ unknown args
-  * allow custom setting args (`--//my/package:setting` and `--no//my/package:setting`)
-  * repeated args
+  * ✔ unknown flags
+  * allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
+  * repeated flags
   * abbreviated flag names; prefer full flags
   * ✔ diagnose deprecated flags
   * offer a fix fix for deprecated no-op flags to remove the flag
@@ -31,6 +31,7 @@ Contributions are welcome. Feel free to just open a pull request.
   * include fixes for config-name-related issues
 * ✔ Hover
   * ✔ Show documentation of flags on hover
+  * Link to flag documentation in hovers
   * ✔ Show documentation for commands on hover
 * Autocomplete
   * ✔ auto complete command names

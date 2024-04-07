@@ -62,7 +62,7 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                     ))
                 }
                 // Diagnose deprecated options
-                if flag_description.metadata_tags.contains(&"DEPRECATED".to_string()) {
+                if flag_description.is_deprecated() {
                     diagnostics.push(Diagnostic {
                         range: range_to_lsp(rope, &name.1).unwrap(),
                         message: format!("The flag {:?} is deprecated.", name.0),

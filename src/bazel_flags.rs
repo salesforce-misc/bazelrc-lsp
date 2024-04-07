@@ -127,6 +127,10 @@ pub fn load_bazel_flags() -> BazelFlags {
 }
 
 impl FlagInfo {
+    pub fn is_deprecated(&self) -> bool {
+        self.metadata_tags.contains(&"DEPRECATED".to_string())
+    }
+
     pub fn get_documentation_markdown(&self) -> String {
         let mut result = String::new();
 

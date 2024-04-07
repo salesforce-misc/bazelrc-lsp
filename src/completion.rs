@@ -1,4 +1,6 @@
-use tower_lsp::lsp_types::{CompletionItem, Documentation, MarkupContent, MarkupKind};
+use tower_lsp::lsp_types::{
+    CompletionItem, CompletionItemTag, Documentation, MarkupContent, MarkupKind,
+};
 
 use crate::{
     bazel_flags::{BazelFlags, COMMAND_DOCS},
@@ -30,10 +32,6 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
         .iter()
         .map(|i| &bazel_flags.flags[*i])
         .filter(|f| {
-            // Hide no-op / deprecated flags
-            if f.effect_tags.contains(&"NO_OP".to_string()) {
-                return false;
-            }
             // Hide undocumented flags
             if f.documentation_category == Some("UNDOCUMENTED".to_string()) {
                 return false;
@@ -53,6 +51,8 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
             label,
             documentation: get_flag_documentation(flag),
             commit_characters: Some(vec!['='.to_string()]),
+            tags: Some(deprecated_tag(flag)),
+            deprecated: Some(flag.is_deprecated()),
             ..Default::default()
         }
     }));
@@ -64,12 +64,21 @@ fn complete_bazel_flag(bazel_flags: &BazelFlags, command: &str) -> Vec<Completio
             .map(|flag| CompletionItem {
                 label: format!("no{}", flag.name.clone()),
                 documentation: get_flag_documentation(flag),
-                commit_characters: Some(vec!['='.to_string()]),
+                tags: Some(deprecated_tag(flag)),
+                deprecated: Some(flag.is_deprecated()),
                 ..Default::default()
             }),
     );
 
     completion_items
+}
+
+fn deprecated_tag(flag: &crate::bazel_flags_proto::FlagInfo) -> Vec<CompletionItemTag> {
+    if flag.is_deprecated() {
+        vec![CompletionItemTag::DEPRECATED]
+    } else {
+        vec![]
+    }
 }
 
 pub fn get_completion_items(
