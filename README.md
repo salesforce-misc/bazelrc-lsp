@@ -19,7 +19,7 @@ Contributions are welcome. Feel free to just open a pull request.
 * ✔ Syntax highlighting / semantic tokens
 * Diagnose
   * ✔ unknown flags
-  * allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
+  * ✔ allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
   * repeated flags
   * abbreviated flag names; prefer full flags
   * ✔ diagnose deprecated flags

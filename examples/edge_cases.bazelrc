@@ -1,4 +1,5 @@
 # This file tries out all the edge cases for bazelrc parsing.
+
 # A \
   multine \
   comment
@@ -27,6 +28,12 @@ clear --flag
 build --some_unknown_flag
 # Deprecated flag
 startup --watchfs
+
+# Custom flag names. Those are not validated at all, currently.
+build --//my/package:setting=foobar
+build --no//my/package:bool_flag
+build --@dependency:my/package:bool_flag
+build --no@dependency:my/package:bool_flag
 
 # Multiline flag lists
 build:myconfig \

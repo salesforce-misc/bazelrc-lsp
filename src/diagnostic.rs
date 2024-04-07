@@ -45,12 +45,19 @@ pub fn diagnostics_from_parser<'a>(
     })
 }
 
+const SKIPPED_PREFIXES: [&str; 4] = ["--//", "--no//", "--@", "--no@"];
+
 fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
     let command = &line.command.as_ref().unwrap().0;
     for flag in &line.flags {
         if let Some(name) = &flag.name {
-            if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
+            if SKIPPED_PREFIXES
+                .iter()
+                .any(|prefix| name.0.starts_with(prefix))
+            {
+                // Don't diagnose custom settings at all
+            } else if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
                 // Diagnose flags used on the wrong command
                 if command != "common"
                     && command != "always"
@@ -263,5 +270,16 @@ fn test_diagnose_flags() {
     assert_eq!(
         diagnose_string("common --expand_configs_in_place"),
         vec!["The flag \"--expand_configs_in_place\" is deprecated."]
+    );
+
+    // Don't diagnose custom flags
+    assert_eq!(
+        diagnose_string(
+            "build --//my/package:setting=foobar
+            build --no//my/package:bool_flag
+            build --@dependency:my/package:bool_flag
+            build --no@dependency:my/package:bool_flag"
+        ),
+        Vec::<String>::new()
     );
 }
