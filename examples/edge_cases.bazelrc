@@ -7,21 +7,29 @@
 build --keep_going --remote_cache= -k
 
 # Various syntaxes for config names
-build:myconfig --flag
-buil"d:my"config --flag
-build: --flag
-build:my\ -config --flag
+build:myconfig --keep_going
+buil"d:my"config --keep_going
+build: --keep_going
+build:my\ -config --keep_going
 
-build --remote_upload_local_results
+# Configs on `import` and `startup` are not valid
+startup:myconfig --autodetect_server_javabase
+import:myconfig "my_file.bazelr"
 
-# `common` and `alway` are special cases for bazelrc files
-common --flag
-always --flag2
+# `common` and `always` are special cases for bazelrc files
+common --keep_going
+always --keep_going
 
 # Invalid command
 clear --flag
 
+# Invalid flag
+build --some_unknown_flag
+# Deprecated flag
+startup --watchfs
+
 # Multiline flag lists
 build:myconfig \
-  --flag \
-  continues_on_next_line
+  --remote_cache \
+  path_to_remote_cache \
+  --disk_cache=

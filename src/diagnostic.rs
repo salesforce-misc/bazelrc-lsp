@@ -126,7 +126,7 @@ pub fn diagnostics_from_rcconfig(
                     "Overly complicated config name. Config names should consist only of lower-case ASCII characters.".to_string(),
                 ));
             }
-            if let Some((command, span)) = &l.command {
+            if let Some((command, _)) = &l.command {
                 if ["startup", "import", "try-import"].contains(&command.as_str()) {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, span).unwrap(),
