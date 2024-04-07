@@ -99,9 +99,11 @@ impl BazelFlags {
             if long_name.starts_with('-') {
                 return None;
             }
+            // Strip the `no` prefix, if any
+            let stripped_no = long_name.strip_prefix("no").unwrap_or(long_name);
             return self
                 .flags_by_name
-                .get(long_name)
+                .get(stripped_no)
                 .map(|i| self.flags.get(*i).unwrap());
         }
         // Short names
