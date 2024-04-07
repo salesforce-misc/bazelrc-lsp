@@ -79,18 +79,16 @@ pub fn convert_to_lsp_tokens(rope: &Rope, semtoks: &[RCSemanticToken]) -> Vec<Se
                 .filter_map(|line| {
                     // Figure out start and end offset within line
                     let first = rope.try_line_to_char(line).ok()? as u32;
-                    let start: u32;
-                    let end: u32;
-                    if line == start_line {
-                        start = token.start as u32 - first;
+                    let start: u32 = if line == start_line {
+                        token.start as u32 - first
                     } else {
-                        start = 0;
-                    }
-                    if line == end_line {
-                        end = token.end as u32 - first;
+                        0
+                    };
+                    let end: u32 = if line == end_line {
+                        token.end as u32 - first
                     } else {
-                        end = rope.get_line(line).unwrap().len_chars() as u32;
-                    }
+                        rope.get_line(line).unwrap().len_chars() as u32
+                    };
                     let length = end - start;
                     // Compute deltas to previous token
                     assert!(line >= pre_line);
