@@ -1,7 +1,7 @@
 use chumsky::error::Simple;
 use regex::Regex;
 use ropey::Rope;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticTag};
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
 
 use crate::{bazel_flags::BazelFlags, lsp_utils::range_to_lsp, parser::Line};
 
@@ -66,6 +66,7 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                     diagnostics.push(Diagnostic {
                         range: range_to_lsp(rope, &name.1).unwrap(),
                         message: format!("The flag {:?} is deprecated.", name.0),
+                        severity: Some(DiagnosticSeverity::WARNING),
                         tags: Some(vec![DiagnosticTag::DEPRECATED]),
                         ..Default::default()
                     });

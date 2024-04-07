@@ -17,7 +17,6 @@ Contributions are welcome. Feel free to just open a pull request.
 ### Backlog
 
 * ✔ Syntax highlighting / semantic tokens
-  * highlight deprecated options
 * Diagnose
   * ✔ unknown flags
   * allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
