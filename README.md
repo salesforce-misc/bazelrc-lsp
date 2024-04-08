@@ -21,13 +21,16 @@ Contributions are welcome. Feel free to just open a pull request.
   * ✔ unknown flags
   * ✔ allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
   * repeated flags
-  * abbreviated flag names; prefer full flags
+  * abbreviated flag names; prefer non-abbreviated flags
   * ✔ diagnose deprecated flags
-  * offer a fix fix for deprecated no-op flags to remove the flag
   * ✔ configs on `startup`, `import`, `try-import`
   * ✔ empty config name
   * ✔ config name which doesn't match `[a-z_\-]+` (or similar)
-  * include fixes for config-name-related issues
+  * offer fix-it:
+    * to remove repeated flags
+    * to replace abbreviated flags by non-abbreviated flags
+    * to remove deprecated no-op flags
+    * to fix config-name-related issues
 * ✔ Hover
   * ✔ Show documentation of flags on hover
   * Correctly escape `<>` in Markdown (e.g. problematic in the documentation for `--config`)
@@ -54,6 +57,7 @@ Contributions are welcome. Feel free to just open a pull request.
 * References:
   * other usages of config name
   * find other usages of same flag
+* Support flags with same name on different commands. E.g., `watchfs` which is deprecated as a startup action, but still is supported as a flag to the `build` command
 * Bazel version support
   * pack multiple flag versions & allow selection via flag
   * run `bazel help flags-as-proto` at runtime
