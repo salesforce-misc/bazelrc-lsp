@@ -1,0 +1,174 @@
+name: Build
+
+on:
+  # For the time being, only build binaries for releases.
+  # Maybe we also want to build for pull requests as soon as this is open-sourced.
+  push:
+  # pull_request:
+  release:
+    types: [prereleased, released]
+
+permissions:
+  # Write permissions needed for publishing the release
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build_lsp_native:
+    name: Build & Test Language Server
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, windows, macos]
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Inspired by https://ectobit.com/blog/speed-up-github-actions-rust-pipelines/
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Lint
+        # Only run the linter on Ubuntu to save some time
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy -- -D warnings
+
+      - name: Test Language Server
+        run: cargo test --verbose
+
+      - name: Build Language Server
+        run: cargo build --release --verbose
+
+      - name: Upload Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+            name: bazelrc-lsp-${{ matrix.os }}${{ runner.os == 'Windows' && '.exe' || '' }}
+            path: ./target/release/bazelrc-lsp${{ runner.os == 'Windows' && '.exe' || '' }}
+            if-no-files-found: error
+
+      - name: Upload Release Artifact
+        if: ${{ github.event_name	== 'release' }}
+        shell: bash
+        run: |
+          upload_url=`echo '${{ github.event.release.upload_url }}' | cut -f1 -d"{"`;
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${upload_url}?name=bazelrc-lsp-${{ matrix.os }}${{ runner.os == 'Windows' && '.exe' || '' }}" \
+            --input './target/release/bazelrc-lsp${{ runner.os == 'Windows' && '.exe' || '' }}'
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+
+  build_vscode_ext:
+    name: Build VS Code extension
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, windows, macos]
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Inspired by https://ectobit.com/blog/speed-up-github-actions-rust-pipelines/
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-vscode-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-vscode-
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-cache-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-cache-
+
+      - name: Install Javascript dependencies
+        working-directory: vscode-extension
+        run: pnpm install
+
+      - name: Lint VSCode extension
+        # Only run the linter on Ubuntu to save some time
+        if: ${{ runner.os == 'Linux' }}
+        working-directory: vscode-extension
+        run: pnpm lint
+
+      - name: Build Language Server
+        run: cargo build --release
+
+      - name: Package VS Code extension
+        working-directory: vscode-extension
+        run: pnpm package:release
+
+      - name: Upload Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+            name: bazelrc-lsp-${{ matrix.os }}-prerelease.vsix
+            path: ./vscode-extension/bazelrc-lsp-*.vsix
+            if-no-files-found: error
+
+      - name: Upload Release Artifact
+        if: ${{ github.event_name	== 'release' }}
+        shell: bash
+        run: |
+          upload_url=`echo '${{ github.event.release.upload_url }}' | cut -f1 -d"{"`;
+          filename=`echo bazelrc-lsp-*.vsix`;
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${upload_url}?name=$filename" \
+            --input "$filename"
+        env:
+          GH_TOKEN: ${{ github.token }}
