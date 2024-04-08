@@ -1,8 +1,5 @@
 import {
-  type ExtensionContext,
-  commands,
-  window,
-  workspace
+  type ExtensionContext
 } from 'vscode';
 
 import {
