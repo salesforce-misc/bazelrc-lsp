@@ -128,6 +128,34 @@ pub fn load_bazel_flags() -> BazelFlags {
     BazelFlags::from_flags(flags)
 }
 
+fn escape_markdown(str: &str) -> String {
+    let mut res = String::with_capacity(str.len());
+    for c in str.chars() {
+        match c {
+            '\\' => res.push_str("\\\\"),
+            '`' => res.push_str("\\`"),
+            '*' => res.push_str("\\*"),
+            '_' => res.push_str("\\_"),
+            '#' => res.push_str("\\#"),
+            '+' => res.push_str("\\+"),
+            '-' => res.push_str("\\-"),
+            '.' => res.push_str("\\."),
+            '!' => res.push_str("\\!"),
+            '~' => res.push_str("\\~"),
+            '{' => res.push_str("\\{"),
+            '}' => res.push_str("\\}"),
+            '[' => res.push_str("\\["),
+            ']' => res.push_str("\\]"),
+            '(' => res.push_str("\\("),
+            ')' => res.push_str("\\)"),
+            '<' => res.push_str("\\<"),
+            '>' => res.push_str("\\>"),
+            _ => res.push(c),
+        }
+    }
+    res
+}
+
 impl FlagInfo {
     pub fn is_deprecated(&self) -> bool {
         self.metadata_tags.contains(&"DEPRECATED".to_string())
@@ -147,7 +175,7 @@ impl FlagInfo {
         // Followed by the documentation text
         if let Some(doc) = &self.documentation {
             result += "\n\n";
-            result += &doc.as_str().replace("%{product}", "Bazel");
+            result += &escape_markdown(&doc.as_str().replace("%{product}", "Bazel"));
         }
         // And a list of tags
         result += "\n\n";

@@ -33,7 +33,7 @@ Contributions are welcome. Feel free to just open a pull request.
     * to fix config-name-related issues
 * ✔ Hover
   * ✔ Show documentation of flags on hover
-  * Correctly escape `<>` in Markdown (e.g. problematic in the documentation for `--config`)
+  * ✔ Correctly escape `<>` in Markdown (e.g. problematic in the documentation for `--config`)
   * Link to flag documentation in hovers
   * ✔ Show documentation for commands on hover
 * Autocomplete
