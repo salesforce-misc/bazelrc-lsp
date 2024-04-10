@@ -48,6 +48,16 @@ Contributions are welcome. Feel free to just open a pull request.
     * based on config names used elsewhere in the file / project
   * file names for `import` / `try-import`
 * Format / pretty print
+  * improved formatting behavior
+    * ✔ basic formatting support
+    * "line reflowing" support
+    * compact multiple consecutive empty lines
+    * break up multiline comments
+    * more aggressive reformatting of comments / smarter detection of ASCII art
+  * LSP formatting
+    * ✔ whole document formatting
+    * range formatting
+  * expose through command line
 * `import` support
   * link file names
   * diagnose if file is not found

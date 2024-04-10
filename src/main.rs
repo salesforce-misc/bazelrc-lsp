@@ -1,6 +1,7 @@
 use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags, COMMAND_DOCS};
 use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
+use bazelrc_lsp::formatting::format_line;
 use bazelrc_lsp::line_index::{IndexEntry, IndexEntryKind, IndexedLines};
 use bazelrc_lsp::lsp_utils::{lsp_pos_to_offset, range_to_lsp};
 use bazelrc_lsp::parser::{parse_from_str, ParserResult};
@@ -24,6 +25,7 @@ struct AnalyzedDocument {
     rope: Rope,
     semantic_tokens: Vec<RCSemanticToken>,
     indexed_lines: IndexedLines,
+    parser_errors: Vec<chumsky::prelude::Simple<char>>,
 }
 
 #[derive(Debug)]
@@ -58,6 +60,7 @@ impl Backend {
             params.uri.to_string(),
             AnalyzedDocument {
                 rope,
+                parser_errors: errors,
                 semantic_tokens,
                 indexed_lines,
             },
@@ -112,6 +115,7 @@ impl LanguageServer for Backend {
                     ..Default::default()
                 }),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                document_formatting_provider: Some(OneOf::Left(true)),
                 ..ServerCapabilities::default()
             },
         })
@@ -232,6 +236,41 @@ impl LanguageServer for Backend {
                 }
             }
         }())
+    }
+
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        // Find the right document
+        let uri = params.text_document.uri.to_string();
+        let doc = self
+            .document_map
+            .get(&uri)
+            .ok_or(Error::invalid_params("Unknown document!"))?;
+        let rope = &doc.rope;
+
+        if !doc.parser_errors.is_empty() {
+            return Err(Error::invalid_params(
+                "Formatting can only be applied if there are no parsing errors",
+            ));
+        }
+
+        // Try formatting every line and replace it if anything changed
+        let text_edits = doc
+            .indexed_lines
+            .lines
+            .iter()
+            .filter_map(|line| {
+                let formatted = format_line(line);
+                if formatted != doc.rope.slice(line.span.clone()) {
+                    Some(TextEdit {
+                        range: range_to_lsp(rope, &line.span)?,
+                        new_text: formatted,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(Some(text_edits))
     }
 }
 
