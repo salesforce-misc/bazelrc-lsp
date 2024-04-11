@@ -1,10 +1,10 @@
 use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags, COMMAND_DOCS};
 use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
-use bazelrc_lsp::formatting::format_line;
+use bazelrc_lsp::formatting::get_text_edits_for_lines;
 use bazelrc_lsp::line_index::{IndexEntry, IndexEntryKind, IndexedLines};
 use bazelrc_lsp::lsp_utils::{lsp_pos_to_offset, range_to_lsp};
-use bazelrc_lsp::parser::{parse_from_str, ParserResult};
+use bazelrc_lsp::parser::{parse_from_str, Line, ParserResult};
 use bazelrc_lsp::semantic_token::{
     convert_to_lsp_tokens, semantic_tokens_from_lines, RCSemanticToken, LEGEND_TYPE,
 };
@@ -116,6 +116,7 @@ impl LanguageServer for Backend {
                 }),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
+                document_range_formatting_provider: Some(OneOf::Left(true)),
                 ..ServerCapabilities::default()
             },
         })
@@ -253,24 +254,43 @@ impl LanguageServer for Backend {
             ));
         }
 
-        // Try formatting every line and replace it if anything changed
-        let text_edits = doc
-            .indexed_lines
-            .lines
-            .iter()
-            .filter_map(|line| {
-                let formatted = format_line(line);
-                if formatted != doc.rope.slice(line.span.clone()) {
-                    Some(TextEdit {
-                        range: range_to_lsp(rope, &line.span)?,
-                        new_text: formatted,
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        Ok(Some(text_edits))
+        // Format all lines
+        let lines = &doc.indexed_lines.lines;
+        Ok(Some(get_text_edits_for_lines(lines, rope)))
+    }
+
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        // Find the right document
+        let uri = params.text_document.uri.to_string();
+        let doc = self
+            .document_map
+            .get(&uri)
+            .ok_or(Error::invalid_params("Unknown document!"))?;
+        let rope = &doc.rope;
+
+        if !doc.parser_errors.is_empty() {
+            return Err(Error::invalid_params(
+                "Formatting can only be applied if there are no parsing errors",
+            ));
+        }
+
+        // Format the line range
+        let all_lines = &doc.indexed_lines.lines;
+        let start_offset = lsp_pos_to_offset(rope, &params.range.start)
+            .ok_or(Error::invalid_params("Position out of range!"))?;
+        let end_offset = lsp_pos_to_offset(rope, &params.range.end)
+            .ok_or(Error::invalid_params("Position out of range!"))?;
+        // XXX not correct, yet
+        let first_idx = all_lines.partition_point(|l: &Line| l.span.start < start_offset);
+        let last_idx = all_lines.partition_point(|l: &Line| l.span.end < end_offset) + 1;
+
+        Ok(Some(get_text_edits_for_lines(
+            &all_lines[first_idx..last_idx],
+            rope,
+        )))
     }
 }
 

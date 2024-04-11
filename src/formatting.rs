@@ -1,4 +1,10 @@
-use crate::parser::{parse_from_str, Line};
+use ropey::Rope;
+use tower_lsp::lsp_types::TextEdit;
+
+use crate::{
+    lsp_utils::range_to_lsp,
+    parser::{parse_from_str, Line},
+};
 
 pub fn format_token_into(out: &mut String, tok: &str) {
     if tok.is_empty() {
@@ -81,6 +87,23 @@ pub fn format_line(line: &Line) -> String {
     format_line_into(&mut out, line);
     out.push('\n');
     out
+}
+
+pub fn get_text_edits_for_lines(lines: &[Line], rope: &Rope) -> Vec<TextEdit> {
+    lines
+        .iter()
+        .filter_map(|line| {
+            let formatted = format_line(line);
+            if formatted != rope.slice(line.span.clone()) {
+                Some(TextEdit {
+                    range: range_to_lsp(rope, &line.span)?,
+                    new_text: formatted,
+                })
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
 }
 
 pub fn pretty_print(str: &str) -> Option<String> {
@@ -182,5 +205,8 @@ fn test_pretty_print_e2e() {
     assert_eq!(pretty_print("build --x=\"\"").unwrap(), "build --x=\n");
 
     // Does not mix separate lines together
-    assert_eq!(pretty_print("build\n#a\ntest").unwrap(), "build\n#a\ntest\n");
+    assert_eq!(
+        pretty_print("build\n#a\ntest").unwrap(),
+        "build\n#a\ntest\n"
+    );
 }

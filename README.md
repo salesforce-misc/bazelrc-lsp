@@ -50,13 +50,14 @@ Contributions are welcome. Feel free to just open a pull request.
 * Format / pretty print
   * improved formatting behavior
     * ✔ basic formatting support
-    * "line reflowing" support
+    * always quote arguments to `import` / `try-import`
+    * "line reflowing" support (one flag per line; one flag per command; ...)
     * compact multiple consecutive empty lines
     * break up multiline comments
     * more aggressive reformatting of comments / smarter detection of ASCII art
-  * LSP formatting
+  * ✔ LSP integration
     * ✔ whole document formatting
-    * range formatting
+    * ✔ range formatting
   * expose through command line
 * `import` support
   * link file names
