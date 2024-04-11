@@ -50,7 +50,7 @@ Contributions are welcome. Feel free to just open a pull request.
 * Format / pretty print
   * improved formatting behavior
     * ✔ basic formatting support
-    * always quote arguments to `import` / `try-import`
+    * ✔ always quote arguments to `import` / `try-import`
     * "line reflowing" support (one flag per line; one flag per command; ...)
     * compact multiple consecutive empty lines
     * break up multiline comments
