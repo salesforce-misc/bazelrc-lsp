@@ -65,11 +65,7 @@ fn complete_bazel_flag(
     // The Bazel flags themselves...
     let mut completion_items: Vec<CompletionItem> = Vec::<CompletionItem>::new();
     completion_items.extend(relevant_flags.clone().map(|flag| {
-        let new_text = if flag.requires_value() {
-            format!("--{}=", flag.name)
-        } else {
-            format!("--{}", flag.name)
-        };
+        let new_text = format!("--{}", flag.name);
         create_completion_item(flag.name.clone(), new_text, flag, vec!["=".to_string()])
     }));
 
