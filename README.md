@@ -23,7 +23,7 @@ Contributions are welcome. Feel free to just open a pull request.
   * repeated flags
   * abbreviated flag names; prefer non-abbreviated flags
   * ✔ diagnose deprecated flags
-  * diagnose missing `import`ed files
+  * ✔ diagnose missing `import`ed files
   * ✔ configs on `startup`, `import`, `try-import`
   * ✔ empty config name
   * ✔ config name which doesn't match `[a-z_\-]+` (or similar)

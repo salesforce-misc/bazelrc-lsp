@@ -1,9 +1,14 @@
+use std::path::Path;
+
 use chumsky::error::Simple;
 use regex::Regex;
 use ropey::Rope;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
 
-use crate::{bazel_flags::BazelFlags, lsp_utils::range_to_lsp, parser::Line};
+use crate::{
+    bazel_flags::BazelFlags, file_utils::resolve_bazelrc_path, lsp_utils::range_to_lsp,
+    parser::Line,
+};
 
 pub fn diagnostics_from_parser<'a>(
     rope: &'a Rope,
@@ -90,10 +95,73 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
     diagnostics
 }
 
+fn diagnostics_for_imports(rope: &Rope, line: &Line, base_path: Option<&Path>) -> Vec<Diagnostic> {
+    let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
+    let command = line.command.as_ref().unwrap();
+    if line.flags.is_empty() {
+        diagnostics.push(Diagnostic::new_simple(
+            range_to_lsp(rope, &command.1).unwrap(),
+            "Missing file path".to_string(),
+        ))
+    } else if line.flags.len() > 1 {
+        diagnostics.push(Diagnostic::new_simple(
+            range_to_lsp(rope, &command.1).unwrap(),
+            format!(
+                "`{}` expects a single file name, but received multiple arguments",
+                command.0
+            ),
+        ))
+    } else {
+        let flag = &line.flags[0];
+        if flag.name.is_some() {
+            diagnostics.push(Diagnostic::new_simple(
+                range_to_lsp(rope, &command.1).unwrap(),
+                format!("`{}` expects a file name, not a flag name", command.0),
+            ))
+        }
+        if let Some(act_base_path) = base_path {
+            if let Some(value) = flag.value.as_ref() {
+                let severity = if command.0 == "try-import" {
+                    DiagnosticSeverity::WARNING
+                } else {
+                    DiagnosticSeverity::ERROR
+                };
+                let opt_path = resolve_bazelrc_path(act_base_path, &value.0);
+                if let Some(path) = opt_path {
+                    if !path.exists() {
+                        diagnostics.push(Diagnostic {
+                            range: range_to_lsp(rope, &value.1).unwrap(),
+                            message: "Imported file does not exist".to_string(),
+                            severity: Some(severity),
+                            ..Default::default()
+                        })
+                    } else if !path.is_file() {
+                        diagnostics.push(Diagnostic {
+                            range: range_to_lsp(rope, &value.1).unwrap(),
+                            message: "Imported path exists, but is not a file".to_string(),
+                            severity: Some(severity),
+                            ..Default::default()
+                        })
+                    }
+                } else {
+                    diagnostics.push(Diagnostic {
+                        range: range_to_lsp(rope, &value.1).unwrap(),
+                        message: "Unable to resolve file name".to_string(),
+                        severity: Some(severity),
+                        ..Default::default()
+                    })
+                }
+            }
+        }
+    }
+    diagnostics
+}
+
 pub fn diagnostics_from_rcconfig(
     rope: &Rope,
     lines: &[Line],
     bazel_flags: &BazelFlags,
+    file_path: Option<&Path>,
 ) -> Vec<Diagnostic> {
     let config_regex = Regex::new(r"^[a-z_][a-z0-9]*(?:[-_][a-z0-9]+)*$").unwrap();
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
@@ -102,7 +170,7 @@ pub fn diagnostics_from_rcconfig(
         // Command-specific diagnostics
         if let Some((command, span)) = &l.command {
             if command == "import" || command == "try-import" {
-                // TODO check that the imported file exists.
+                diagnostics.extend(diagnostics_for_imports(rope, l, file_path))
             } else if bazel_flags.flags_by_commands.get(command).is_some() {
                 diagnostics.extend(diagnostics_for_flags(rope, l, bazel_flags))
             } else {
@@ -164,7 +232,7 @@ fn diagnose_string(str: &str) -> Vec<String> {
     assert!(errors.is_empty());
 
     let bazel_flags = load_bazel_flags();
-    return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags)
+    return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags, None)
         .iter_mut()
         .map(|d| std::mem::take(&mut d.message))
         .collect::<Vec<_>>();
@@ -281,5 +349,19 @@ fn test_diagnose_flags() {
             build --no@dependency:my/package:bool_flag"
         ),
         Vec::<String>::new()
+    );
+}
+
+#[test]
+fn test_diagnose_import() {
+    assert_eq!(diagnose_string("import"), vec!["Missing file path"]);
+    assert_eq!(diagnose_string("try-import"), vec!["Missing file path"]);
+    assert_eq!(
+        diagnose_string("import --a"),
+        vec!["`import` expects a file name, not a flag name"]
+    );
+    assert_eq!(
+        diagnose_string("import a b"),
+        vec!["`import` expects a single file name, but received multiple arguments"]
     );
 }

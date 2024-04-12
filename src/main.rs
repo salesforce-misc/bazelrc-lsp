@@ -41,6 +41,9 @@ impl Backend {
         let rope = ropey::Rope::from_str(&params.text);
         let src = rope.to_string();
 
+        let file_path_buf = params.uri.to_file_path().ok();
+        let file_path = file_path_buf.as_deref();
+
         let ParserResult {
             tokens: _,
             lines,
@@ -55,6 +58,7 @@ impl Backend {
             &rope,
             &indexed_lines.lines,
             &self.bazel_flags,
+            file_path,
         ));
 
         self.document_map.insert(
@@ -312,9 +316,6 @@ impl LanguageServer for Backend {
             .to_file_path()
             .ok()
             .ok_or(Error::invalid_params("Unsupported URI scheme!"))?;
-        let base_path = file_path
-            .parent()
-            .ok_or(Error::invalid_params("Invalid file path!"))?;
 
         // Link all `import` and `try-import` lines
         let links = doc
@@ -334,7 +335,7 @@ impl LanguageServer for Backend {
                     return None;
                 }
                 let value = flag.value.as_ref()?;
-                let path = resolve_bazelrc_path(base_path, &value.0)?;
+                let path = resolve_bazelrc_path(&file_path, &value.0)?;
                 let url = Url::from_file_path(path).ok()?;
                 Some(DocumentLink {
                     range: range_to_lsp(rope, &value.1)?,

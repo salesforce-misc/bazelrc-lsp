@@ -20,10 +20,10 @@ pub fn get_workspace_path(path: &Path) -> Option<PathBuf> {
     None
 }
 
-pub fn resolve_bazelrc_path(base_path: &Path, raw_path: &str) -> Option<PathBuf> {
+pub fn resolve_bazelrc_path(file_path: &Path, raw_path: &str) -> Option<PathBuf> {
     let mut path = raw_path.to_string();
     if path.contains("%workspace%") {
-        path = path.replace("%workspace%", get_workspace_path(base_path)?.to_str()?);
+        path = path.replace("%workspace%", get_workspace_path(file_path)?.to_str()?);
     }
-    Some(base_path.join(Path::new(&path)))
+    Some(file_path.join(Path::new(&path)))
 }
