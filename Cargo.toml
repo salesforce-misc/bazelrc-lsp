@@ -18,3 +18,9 @@ phf = { version = "0.11.2", features = ["macros"] }
 
 [build-dependencies]
 prost-build = { version = "0.12.3" }
+
+[profile.release]
+opt-level = 'z'     # Optimize for size
+lto = true          # Enable link-time optimization
+panic = 'abort'     # Abort on panic
+strip = true        # Strip symbols from binary*
