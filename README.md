@@ -52,6 +52,7 @@ Contributions are welcome. Feel free to just open a pull request.
   * improved formatting behavior
     * ✔ basic formatting support
     * ✔ always quote arguments to `import` / `try-import`
+    * combine `--flag value` into `--flag=value`
     * "line reflowing" support (one flag per line; one flag per command; ...)
     * compact multiple consecutive empty lines
     * break up multiline comments
