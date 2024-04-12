@@ -213,7 +213,10 @@ fn test_pretty_print_e2e() {
 
     // Import / try-import arguments are always quoted
     assert_eq!(pretty_print("import x.rc").unwrap(), "import \"x.rc\"\n");
-    assert_eq!(pretty_print("try-import x.rc").unwrap(), "try-import \"x.rc\"\n");
+    assert_eq!(
+        pretty_print("try-import x.rc").unwrap(),
+        "try-import \"x.rc\"\n"
+    );
 
     // Handles empty parameters correctly
     assert_eq!(pretty_print("build --x \"\"").unwrap(), "build --x \"\"\n");

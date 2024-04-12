@@ -1,6 +1,7 @@
 pub mod bazel_flags;
 pub mod completion;
 pub mod diagnostic;
+pub mod file_utils;
 pub mod formatting;
 pub mod line_index;
 pub mod lsp_utils;

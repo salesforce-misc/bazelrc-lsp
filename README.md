@@ -23,6 +23,7 @@ Contributions are welcome. Feel free to just open a pull request.
   * repeated flags
   * abbreviated flag names; prefer non-abbreviated flags
   * ✔ diagnose deprecated flags
+  * diagnose missing `import`ed files
   * ✔ configs on `startup`, `import`, `try-import`
   * ✔ empty config name
   * ✔ config name which doesn't match `[a-z_\-]+` (or similar)
@@ -59,9 +60,7 @@ Contributions are welcome. Feel free to just open a pull request.
     * ✔ whole document formatting
     * ✔ range formatting
   * expose through command line
-* `import` support
-  * link file names
-  * diagnose if file is not found
+* ✔ link file names for `import` & `try-import`
 * Rename functionality for config names
 * Bazel-side changes:
   * expose default value, value description and old names and deprecation messages

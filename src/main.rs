@@ -1,6 +1,7 @@
 use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags, COMMAND_DOCS};
 use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
+use bazelrc_lsp::file_utils::resolve_bazelrc_path;
 use bazelrc_lsp::formatting::get_text_edits_for_lines;
 use bazelrc_lsp::line_index::{IndexEntry, IndexEntryKind, IndexedLines};
 use bazelrc_lsp::lsp_utils::{lsp_pos_to_offset, range_to_lsp};
@@ -117,6 +118,10 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
                 document_range_formatting_provider: Some(OneOf::Left(true)),
+                document_link_provider: Some(DocumentLinkOptions {
+                    resolve_provider: None,
+                    work_done_progress_options: Default::default(),
+                }),
                 ..ServerCapabilities::default()
             },
         })
@@ -291,6 +296,55 @@ impl LanguageServer for Backend {
             &all_lines[first_idx..last_idx],
             rope,
         )))
+    }
+
+    async fn document_link(&self, params: DocumentLinkParams) -> Result<Option<Vec<DocumentLink>>> {
+        // Find the right document
+        let uri = params.text_document.uri.to_string();
+        let doc = self
+            .document_map
+            .get(&uri)
+            .ok_or(Error::invalid_params("Unknown document!"))?;
+        let rope = &doc.rope;
+        let file_path = params
+            .text_document
+            .uri
+            .to_file_path()
+            .ok()
+            .ok_or(Error::invalid_params("Unsupported URI scheme!"))?;
+        let base_path = file_path
+            .parent()
+            .ok_or(Error::invalid_params("Invalid file path!"))?;
+
+        // Link all `import` and `try-import` lines
+        let links = doc
+            .indexed_lines
+            .lines
+            .iter()
+            .filter_map(|line| {
+                let command = line.command.as_ref()?;
+                if command.0 != "import" && command.0 != "try-import" {
+                    return None;
+                }
+                if line.flags.len() != 1 {
+                    return None;
+                }
+                let flag = &line.flags[0];
+                if flag.name.is_some() {
+                    return None;
+                }
+                let value = flag.value.as_ref()?;
+                let path = resolve_bazelrc_path(base_path, &value.0)?;
+                let url = Url::from_file_path(path).ok()?;
+                Some(DocumentLink {
+                    range: range_to_lsp(rope, &value.1)?,
+                    target: Some(url),
+                    tooltip: None,
+                    data: None,
+                })
+            })
+            .collect::<Vec<_>>();
+        Ok(Some(links))
     }
 }
 
