@@ -6,27 +6,24 @@ use crate::{
     parser::{parse_from_str, Line},
 };
 
-pub fn format_quoted_token_into(out: &mut String, tok: &str) {
-    out.push('"');
-    for c in tok.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\"' => out.push_str("\\\""),
-            _ => out.push(c),
-        }
-    }
-    out.push('"');
-}
-
 pub fn format_token_into(out: &mut String, tok: &str) {
-    if !tok.is_empty()
-        && tok
-            .chars()
-            .all(|c| (c.is_alphanumeric() || c.is_ascii_punctuation()) && c != '"' && c != '\\')
+    if tok.is_empty() {
+        out.push_str("\"\"")
+    } else if tok
+        .chars()
+        .all(|c| (c.is_alphanumeric() || c.is_ascii_punctuation()) && c != '"' && c != '\\')
     {
         out.push_str(tok);
     } else {
-        format_quoted_token_into(out, tok);
+        out.push('"');
+        for c in tok.chars() {
+            match c {
+                '\\' => out.push_str("\\\\"),
+                '\"' => out.push_str("\\\""),
+                _ => out.push(c),
+            }
+        }
+        out.push('"');
     }
 }
 
@@ -62,15 +59,7 @@ pub fn format_line_into(out: &mut String, line: &Line) {
                 }
             }
         } else if let Some(value) = &flag.value {
-            if let Some(command) = &line.command {
-                if command.0 == "import" || command.0 == "try-import" {
-                    format_quoted_token_into(out, &value.0);
-                } else {
-                    format_token_into(out, &value.0);
-                }
-            } else {
-                format_token_into(out, &value.0);
-            }
+            format_token_into(out, &value.0);
         }
         out.push(' ');
     }
@@ -210,13 +199,6 @@ fn test_pretty_print_e2e() {
     );
 
     // TODO: More test cases
-
-    // Import / try-import arguments are always quoted
-    assert_eq!(pretty_print("import x.rc").unwrap(), "import \"x.rc\"\n");
-    assert_eq!(
-        pretty_print("try-import x.rc").unwrap(),
-        "try-import \"x.rc\"\n"
-    );
 
     // Handles empty parameters correctly
     assert_eq!(pretty_print("build --x \"\"").unwrap(), "build --x \"\"\n");
