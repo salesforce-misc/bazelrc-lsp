@@ -171,7 +171,7 @@ pub fn diagnostics_from_rcconfig(
         if let Some((command, span)) = &l.command {
             if command == "import" || command == "try-import" {
                 diagnostics.extend(diagnostics_for_imports(rope, l, file_path))
-            } else if bazel_flags.flags_by_commands.get(command).is_some() {
+            } else if bazel_flags.flags_by_commands.contains_key(command) {
                 diagnostics.extend(diagnostics_for_flags(rope, l, bazel_flags))
             } else {
                 diagnostics.push(Diagnostic::new_simple(
