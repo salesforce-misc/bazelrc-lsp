@@ -62,7 +62,7 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                 .any(|prefix| name.0.starts_with(prefix))
             {
                 // Don't diagnose custom settings at all
-            } else if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
+            } else if let Some(flag_description) = bazel_flags.get_by_invocation(command, &name.0) {
                 // Diagnose flags used on the wrong command
                 if !flag_description.supports_command(command) {
                     diagnostics.push(Diagnostic::new_simple(

@@ -42,24 +42,27 @@ pub struct BazelFlags {
     pub commands: Vec<String>,
     pub flags: Vec<FlagInfo>,
     pub flags_by_commands: HashMap<String, Vec<usize>>,
-    pub flags_by_name: HashMap<String, usize>,
-    pub flags_by_abbreviation: HashMap<String, usize>,
+    pub flags_by_name: HashMap<String, Vec<usize>>,
+    pub flags_by_abbreviation: HashMap<String, Vec<usize>>,
 }
 
 impl BazelFlags {
     pub fn from_flags(flags: Vec<FlagInfo>) -> BazelFlags {
         // Index the flags from the protobuf description
         let mut flags_by_commands = HashMap::<String, Vec<usize>>::new();
-        let mut flags_by_name = HashMap::<String, usize>::new();
-        let mut flags_by_abbreviation = HashMap::<String, usize>::new();
+        let mut flags_by_name = HashMap::<String, Vec<usize>>::new();
+        let mut flags_by_abbreviation = HashMap::<String, Vec<usize>>::new();
         for (i, f) in flags.iter().enumerate() {
             for c in &f.commands {
                 let list = flags_by_commands.entry(c.clone()).or_default();
                 list.push(i);
             }
-            flags_by_name.insert(f.name.clone(), i);
+            flags_by_name.entry(f.name.clone()).or_default().push(i);
             if let Some(abbreviation) = &f.abbreviation {
-                flags_by_abbreviation.insert(abbreviation.clone(), i);
+                flags_by_abbreviation
+                    .entry(abbreviation.clone())
+                    .or_default()
+                    .push(i);
             }
         }
 
@@ -92,31 +95,46 @@ impl BazelFlags {
         }
     }
 
-    pub fn get_by_invocation(&self, s: &str) -> Option<&FlagInfo> {
-        let stripped = s.strip_suffix('=').unwrap_or(s);
-        // Long names
+    pub fn get_by_invocation(&self, command: &str, invocation: &str) -> Option<&FlagInfo> {
+        let stripped: &str = invocation.strip_suffix('=').unwrap_or(invocation);
         if let Some(long_name) = stripped.strip_prefix("--") {
+            // Long names
             if long_name.starts_with('-') {
                 return None;
             }
             // Strip the `no` prefix, if any
             let stripped_no = long_name.strip_prefix("no").unwrap_or(long_name);
-            return self
-                .flags_by_name
-                .get(stripped_no)
-                .map(|i| self.flags.get(*i).unwrap());
-        }
-        // Short names
-        if let Some(abbreviation) = stripped.strip_prefix('-') {
-            if abbreviation.starts_with('-') {
-                return None;
-            }
-            return self
-                .flags_by_abbreviation
-                .get(abbreviation)
-                .map(|i| self.flags.get(*i).unwrap());
+            let idcs = self.flags_by_name.get(stripped_no)?;
+            print!("idcs {:?}\n", idcs);
+            return self.filter_flags_for_command(command, idcs);
+        } else if let Some(abbreviation) = stripped.strip_prefix('-') {
+            // Short names
+            assert!(!abbreviation.starts_with('-'));
+            let idcs = self.flags_by_abbreviation.get(abbreviation)?;
+            return self.filter_flags_for_command(command, idcs);
         }
         None
+    }
+
+    fn filter_flags_for_command(&self, command: &str, idcs: &[usize]) -> Option<&FlagInfo> {
+        let filtered_flags = idcs
+            .iter()
+            .map(|i| self.flags.get(*i).unwrap())
+            // Filter to include only flags
+            .filter(|f| f.supports_command(command))
+            .collect::<Vec<_>>();
+        if filtered_flags.is_empty() {
+            if idcs.len() == 1 {
+                // Try the unfiltered flags instead
+                Some(self.flags.get(idcs[0]).unwrap())
+            } else {
+                None
+            }
+        } else if filtered_flags.len() == 1 {
+            Some(filtered_flags[0])
+        } else {
+            None
+        }
     }
 }
 
@@ -225,7 +243,7 @@ fn test_flags() {
     assert!(commands.contains(&"common".to_string()));
 
     // Can lookup a flag by its invocation
-    let preemptible_info = flags.get_by_invocation("--preemptible");
+    let preemptible_info = flags.get_by_invocation("startup", "--preemptible");
     assert_eq!(
         preemptible_info
             .unwrap()
@@ -238,9 +256,15 @@ fn test_flags() {
 
     // Supports both short and long forms
     assert_eq!(
-        flags.get_by_invocation("-k"),
-        flags.get_by_invocation("--keep_going")
+        flags.get_by_invocation("build", "-k"),
+        flags.get_by_invocation("build", "--keep_going")
     );
+
+    // Can distinguish between flags which have different definitions for different commands
+    assert!(flags.get_by_invocation("startup", "--watchfs").unwrap().is_deprecated());
+    assert!(!flags.get_by_invocation("build", "--watchfs").unwrap().is_deprecated());
+    assert!(!flags.get_by_invocation("test", "--watchfs").unwrap().is_deprecated());
+    assert!(flags.get_by_invocation("clean", "--watchfs").is_none());
 
     // The `remote_cache` is valid for at least one command. Hence, it should be in `common`.
     let build_flag_id = flags

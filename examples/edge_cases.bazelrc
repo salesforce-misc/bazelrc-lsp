@@ -33,6 +33,7 @@ build --disk_cache=
 build --some_unknown_flag
 # Deprecated flag
 startup --watchfs
+build --watchfs
 
 # Custom flag names. Those are not validated at all, currently.
 build --//my/package:setting=foobar
