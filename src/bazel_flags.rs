@@ -161,6 +161,12 @@ impl FlagInfo {
         self.metadata_tags.contains(&"DEPRECATED".to_string())
     }
 
+    pub fn supports_command(&self, command: &str) -> bool {
+        command == "common"
+        || command == "always"
+        || self.commands.iter().any(|c| c == command)
+    }
+
     pub fn get_documentation_markdown(&self) -> String {
         let mut result = String::new();
 

@@ -64,10 +64,7 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                 // Don't diagnose custom settings at all
             } else if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
                 // Diagnose flags used on the wrong command
-                if command != "common"
-                    && command != "always"
-                    && !flag_description.commands.contains(command)
-                {
+                if !flag_description.supports_command(command) {
                     diagnostics.push(Diagnostic::new_simple(
                         range_to_lsp(rope, &name.1).unwrap(),
                         format!("The flag {:?} is not supported for {:?}. It is supported for {:?} commands, though.", name.0, command, flag_description.commands),
