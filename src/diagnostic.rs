@@ -216,6 +216,7 @@ pub fn diagnostics_from_rcconfig(
 
 #[cfg(test)]
 fn diagnose_string(str: &str) -> Vec<String> {
+    use crate::bazel_flags::combine_key_value_flags;
     use crate::bazel_flags::load_bazel_flags;
     use crate::parser::parse_from_str;
     use crate::parser::ParserResult;
@@ -223,12 +224,13 @@ fn diagnose_string(str: &str) -> Vec<String> {
     let rope = Rope::from_str(str);
     let ParserResult {
         tokens: _,
-        lines,
+        mut lines,
         errors,
     } = parse_from_str(str);
     assert!(errors.is_empty());
 
     let bazel_flags = load_bazel_flags();
+    combine_key_value_flags(&mut lines, &bazel_flags);
     return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags, None)
         .iter_mut()
         .map(|d| std::mem::take(&mut d.message))
@@ -346,6 +348,24 @@ fn test_diagnose_flags() {
             build --no@dependency:my/package:bool_flag"
         ),
         Vec::<String>::new()
+    );
+}
+
+#[test]
+fn test_diagnose_combined_flags() {
+    // The `--copt` flag expects an argument and hence consumes the
+    // following `--std=c++20`. `--std=c++20` should not raise
+    // an error about an unrecognized Bazel flag.
+    assert_eq!(
+        diagnose_string("build --copt --std=c++20"),
+        Vec::<&str>::new()
+    );
+    // On the other hand, `--keep_going` only takes an optional value.
+    // Hence, the `true` is interpreted as a separate flag, which then triggers
+    // an error.
+    assert_eq!(
+        diagnose_string("build --keep_going --foobar"),
+        vec!["Unknown flag \"--foobar\""]
     );
 }
 

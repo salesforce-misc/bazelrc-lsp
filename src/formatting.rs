@@ -2,8 +2,9 @@ use ropey::Rope;
 use tower_lsp::lsp_types::TextEdit;
 
 use crate::{
+    bazel_flags::load_bazel_flags,
     lsp_utils::range_to_lsp,
-    parser::{parse_from_str, Line},
+    parser::{parse_from_str, Line, ParserResult},
 };
 
 pub fn format_token_into(out: &mut String, tok: &str) {
@@ -45,8 +46,6 @@ pub fn format_line_into(out: &mut String, line: &Line) {
     if line.command.is_some() || line.config.is_some() {
         out.push(' ');
     }
-
-    // TODO: combine `--flag value` to `--flag=value`
 
     // Format the flags
     for flag in &line.flags {
@@ -107,15 +106,21 @@ pub fn get_text_edits_for_lines(lines: &[Line], rope: &Rope) -> Vec<TextEdit> {
 }
 
 pub fn pretty_print(str: &str) -> Option<String> {
-    let parse_result = parse_from_str(str);
-    if !parse_result.errors.is_empty() {
+    let ParserResult {
+        tokens: _,
+        mut lines,
+        errors,
+    } = parse_from_str(str);
+    if !errors.is_empty() {
         return None;
     }
+    let bazel_flags = load_bazel_flags();
+    crate::bazel_flags::combine_key_value_flags(&mut lines, &bazel_flags);
     // TODO also support "single flag per command" and "single flag per line"
     // TODO strip duplicated empty lines directly following each other
     // TODO strip trailing new lines
     let mut out = String::with_capacity(str.len());
-    for line in parse_result.lines {
+    for line in lines {
         format_line_into(&mut out, &line);
         out.push('\n');
     }
@@ -175,6 +180,24 @@ fn test_pretty_print_flags() {
     assert_eq!(pretty_print("--x=\"\"").unwrap(), "--x=\n");
     // Removes whitespaces between flags
     assert_eq!(pretty_print("--x=1    --y=2").unwrap(), "--x=1 --y=2\n");
+}
+
+#[test]
+fn test_pretty_print_combined_flags() {
+    // The `--copt` flag expects an argument and hence consumes the
+    // following `--std=c++20`. `--std=c++20` should not raise
+    // an error about an unrecognized Bazel flag.
+    assert_eq!(
+        pretty_print("build --copt --std=c++20").unwrap(),
+        "build --copt=--std=c++20\n"
+    );
+    // On the other hand, `--keep_going` only takes an optional value.
+    // Hence, the `true` is interpreted as a separate flag, which then triggers
+    // an error.
+    assert_eq!(
+        pretty_print("build --keep_going --foobar").unwrap(),
+        "build --keep_going --foobar\n"
+    );
 }
 
 #[test]

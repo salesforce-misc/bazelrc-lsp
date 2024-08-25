@@ -156,15 +156,59 @@ fn escape_markdown(str: &str) -> String {
     res
 }
 
+// Combines flags names with their values based on the `requires_value` metadata
+pub fn combine_key_value_flags(lines: &mut [crate::parser::Line], bazel_flags: &BazelFlags) {
+    use crate::parser::Flag;
+    use crate::tokenizer::Spanned;
+    for l in lines {
+        let mut new_flags = Vec::<Flag>::with_capacity(l.flags.len());
+        let mut i: usize = 0;
+        while i < l.flags.len() {
+            let flag = &l.flags[i];
+            new_flags.push(
+                || -> Option<Spanned<String>> {
+                    let flag_name = &flag.name.as_ref()?.0;
+                    let info = bazel_flags.get_by_invocation(flag_name)?;
+                    if info.requires_value() {
+                        // Combine with the next flag
+                        let next_flag = &l.flags.get(i + 1)?;
+                        i += 1;
+                        if let Some(next_name) = &next_flag.name {
+                            if let Some(next_value) = &next_flag.value {
+                                let combined_str = next_name.0.clone() + "=" + &next_value.0;
+                                let combined_span = crate::tokenizer::Span {
+                                    start: next_name.1.start,
+                                    end: next_value.1.end,
+                                };
+                                return Some((combined_str, combined_span));
+                            } else {
+                                return Some(next_name.clone());
+                            }
+                        } else if let Some(next_value) = &next_flag.value {
+                            return Some(next_value.clone());
+                        }
+                    }
+                    None
+                }()
+                .map(|new_value| Flag {
+                    name: flag.name.clone(),
+                    value: Some(new_value),
+                })
+                .unwrap_or_else(|| flag.clone()),
+            );
+            i += 1;
+        }
+        l.flags = new_flags;
+    }
+}
+
 impl FlagInfo {
     pub fn is_deprecated(&self) -> bool {
         self.metadata_tags.contains(&"DEPRECATED".to_string())
     }
 
     pub fn supports_command(&self, command: &str) -> bool {
-        command == "common"
-        || command == "always"
-        || self.commands.iter().any(|c| c == command)
+        command == "common" || command == "always" || self.commands.iter().any(|c| c == command)
     }
 
     pub fn get_documentation_markdown(&self) -> String {

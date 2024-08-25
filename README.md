@@ -69,9 +69,7 @@ Contributions are welcome. Feel free to just open a pull request.
   * ✔ Show documentation for commands on hover
 * Autocomplete
   * ✔ auto complete command names
-  * flag names:
-    * ✔ basic auto-complete
-    * ✔ insert `--` prefix for options
+  * ✔ flag names
   * flag values:
     * based on available setting values (needs Bazel-side changes)
     * based on previously observed values
@@ -82,8 +80,8 @@ Contributions are welcome. Feel free to just open a pull request.
   * improved formatting behavior
     * ✔ basic formatting support
     * ✔ always quote arguments to `import` / `try-import`
-    * combine `--flag value` into `--flag=value`
-    * "line reflowing" support (one flag per line with `\` line continuations; one flag per command; ...)
+    * ✔ combine `--flag value` into `--flag=value`
+    * "line reflowing" support (all on single line; one flag per line with `\` line continuations; one flag per command; ...)
     * compact multiple consecutive empty lines
     * break up multiline comments
     * more aggressive reformatting of comments / smarter detection of ASCII art

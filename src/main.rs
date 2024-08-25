@@ -1,4 +1,6 @@
-use bazelrc_lsp::bazel_flags::{load_bazel_flags, BazelFlags, COMMAND_DOCS};
+use bazelrc_lsp::bazel_flags::{
+    combine_key_value_flags, load_bazel_flags, BazelFlags, COMMAND_DOCS,
+};
 use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use bazelrc_lsp::file_utils::resolve_bazelrc_path;
@@ -46,9 +48,10 @@ impl Backend {
 
         let ParserResult {
             tokens: _,
-            lines,
+            mut lines,
             errors,
         } = parse_from_str(&src);
+        combine_key_value_flags(&mut lines, &self.bazel_flags);
         let semantic_tokens = semantic_tokens_from_lines(&lines);
         let indexed_lines = IndexedLines::from_lines(lines);
 
