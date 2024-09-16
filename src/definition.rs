@@ -12,22 +12,15 @@ pub fn get_definitions(
     match kind {
         IndexEntryKind::FlagValue(flag_nr) => {
             let flag = &line.flags[*flag_nr];
-            if Option::is_none(&line.command) {
-                return None;
-            }
+            let command_name = &line.command?.0;
             if line.flags.len() != 1 {
                 return None;
             }
-            let command_name = &line.command.as_ref().unwrap().0;
             if *command_name != "import" && *command_name != "try-import" {
                 return None;
             }
 
-            if Option::is_none(&flag.value) {
-                return None;
-            }
-
-            let flag_value = &flag.value.as_ref().unwrap().0;
+            let flag_value = &flag.value?.0;
             let path = resolve_bazelrc_path(file_path, flag_value)?;
             let url = Url::from_file_path(path).ok()?;
             Some(GotoDefinitionResponse::Scalar(Location {
