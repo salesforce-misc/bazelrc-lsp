@@ -2,6 +2,7 @@ use bazelrc_lsp::bazel_flags::{
     combine_key_value_flags, load_bazel_flags, BazelFlags, COMMAND_DOCS,
 };
 use bazelrc_lsp::completion::get_completion_items;
+use bazelrc_lsp::definition::get_definitions;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use bazelrc_lsp::file_utils::resolve_bazelrc_path;
 use bazelrc_lsp::formatting::get_text_edits_for_lines;
@@ -129,6 +130,7 @@ impl LanguageServer for Backend {
                     resolve_provider: None,
                     work_done_progress_options: Default::default(),
                 }),
+                definition_provider: Some(OneOf::Left(true)),
                 ..ServerCapabilities::default()
             },
         })
@@ -199,6 +201,27 @@ impl LanguageServer for Backend {
             &doc.indexed_lines,
             pos,
         ))))
+    }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let file_path = uri
+            .to_file_path()
+            .ok()
+            .ok_or(Error::invalid_params("Unsupported URI scheme!"))?;
+        let doc = self
+            .document_map
+            .get(&uri.to_string())
+            .ok_or(Error::invalid_params("Unknown document!"))?;
+        let pos = lsp_pos_to_offset(&doc.rope, &params.text_document_position_params.position)
+            .ok_or(Error::invalid_params("Position out of range"))?;
+        let IndexEntry { kind, line_nr, .. } =
+            doc.indexed_lines.find_symbol_at_position(pos).unwrap();
+        let definitions = get_definitions(&file_path, kind, &doc.indexed_lines.lines[*line_nr]);
+        Ok(definitions)
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
