@@ -12,7 +12,7 @@ pub fn get_definitions(
     match kind {
         IndexEntryKind::FlagValue(flag_nr) => {
             let flag = &line.flags[*flag_nr];
-            let command_name = &line.command?.0;
+            let command_name = &line.command.as_ref()?.0;
             if line.flags.len() != 1 {
                 return None;
             }
@@ -20,7 +20,7 @@ pub fn get_definitions(
                 return None;
             }
 
-            let flag_value = &flag.value?.0;
+            let flag_value = &flag.value.as_ref()?.0;
             let path = resolve_bazelrc_path(file_path, flag_value)?;
             let url = Url::from_file_path(path).ok()?;
             Some(GotoDefinitionResponse::Scalar(Location {
