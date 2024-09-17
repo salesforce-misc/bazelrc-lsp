@@ -16,6 +16,8 @@ build:my\ -config --keep_going
 # Configs on `import` and `startup` are not valid
 startup:myconfig --autodetect_server_javabase
 import:myconfig "my_file.bazelr"
+import "%workspace%/file2.bazelrc"
+import "%workspace%/no_such_file.bazelrc"
 
 # `common` and `always` are special cases for bazelrc files
 common --keep_going

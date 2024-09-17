@@ -1,0 +1,2 @@
+# `common` and `always` are special cases for bazelrc files
+common --keep_going
