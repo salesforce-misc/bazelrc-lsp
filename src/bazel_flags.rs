@@ -238,7 +238,7 @@ impl FlagInfo {
                 .collect::<Vec<_>>()
                 .join(", ")
                 .as_str();
-            result += "\\\n";
+            result += "\n";
         }
         if !self.metadata_tags.is_empty() {
             result += "Tags: ";
@@ -249,7 +249,7 @@ impl FlagInfo {
                 .collect::<Vec<_>>()
                 .join(", ")
                 .as_str();
-            result += "\\\n";
+            result += "\n";
         }
         if let Some(catgegory) = &self.documentation_category {
             result += format!("Category: {}\n", catgegory.to_lowercase()).as_str();
