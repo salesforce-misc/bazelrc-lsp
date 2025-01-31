@@ -3,8 +3,8 @@ name: Build
 on:
   # For the time being, only build binaries for releases.
   # Maybe we also want to build for pull requests as soon as this is open-sourced.
-  # push:
   # pull_request:
+  push:
   workflow_dispatch:
   release:
     types: [prereleased, released]
