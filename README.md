@@ -16,13 +16,20 @@ For **Visual Studio Code**, we offer a pre-packaged Visual Studio Code plugin:
 I will leave it as an exercise to the reader to figure out how exactly
 to configure the language server for other editors. (Pull requests welcome).
 
+## Bazel version
+
+`bazelrc-lsp` comes packaged with the list of supported Bazel flags for a large range of Bazel versions.
+The exact Bazel version is selected the same way as in Bazelisk:
+If a `USE_BAZEL_VERSION` environment variable is present, then this environment variable is authorative.
+Otherwise, the Bazel version will be determined from the `.bazeliskrc` or the `.bazelversion` file.
+
 ## Current State & Roadmap
 
 The extension is complete enough for my personal needs and hopefully useful to you, too.
 
 Long-term, I am considering to integrate this functionality into the official [VSCode Bazel extension](https://github.com/bazelbuild/vscode-bazel). This is also why this extension is not published to the VS Code Marketplace as a standalone extension.
 
-However, currently this extension still has a couple rough edges. E.g., this extension is currently hard-coded to use the Bazel flags supported by Bazel 7.1.0. Before integrating this language server with the VSCode Bazel extension, and thereby exposing it to a larger user base, those sharp edges first need to be smoothed.
+However, currently this extension still has a couple rough edges. Before integrating this language server with the VSCode Bazel extension, and thereby exposing it to a larger user base, those sharp edges first need to be smoothed.
 
 Pull Requests are welcome! Further down in this README you can find a backlog of various ideas.
 In case you want to discuss any of those topics (or a topic of your own), please feel free to reach out via a Github issue.
@@ -43,7 +50,7 @@ Contributions are welcome. Feel free to just open a pull request.
 
 * Bazel version support
   * ✔ load flags from Bazel's flag dump
-  * pack multiple flag versions & allow selection via flag
+  * ✔ pack multiple flag versions & auto-detect version
   * run `bazel help flags-as-proto` at runtime
 * Support flags with same name on different commands. E.g., `--watchfs` which is deprecated as a startup action, but still is supported as a flag to the `build` command
 * ✔ Syntax highlighting / semantic tokens

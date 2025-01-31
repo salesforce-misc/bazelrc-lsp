@@ -1,6 +1,7 @@
 use bazelrc_lsp::bazel_flags::{
     combine_key_value_flags, load_bazel_flags, BazelFlags, COMMAND_DOCS,
 };
+use bazelrc_lsp::bazel_version::auto_detect_bazel_version;
 use bazelrc_lsp::completion::get_completion_items;
 use bazelrc_lsp::definition::get_definitions;
 use bazelrc_lsp::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
@@ -37,6 +38,8 @@ struct Backend {
     client: Client,
     document_map: DashMap<String, AnalyzedDocument>,
     bazel_flags: BazelFlags,
+    // An optional message which should be displayed to the user on startup
+    startup_warning: Option<String>,
 }
 
 impl Backend {
@@ -140,6 +143,12 @@ impl LanguageServer for Backend {
         self.client
             .log_message(MessageType::INFO, "server initialized!")
             .await;
+
+        if let Some(warning) = &self.startup_warning {
+            self.client
+                .show_message(MessageType::WARNING, warning)
+                .await;
+        }
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -380,10 +389,13 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
+    let (bazel_version, version_message) = auto_detect_bazel_version();
+
     let (service, socket) = LspService::new(|client| Backend {
         client,
         document_map: Default::default(),
-        bazel_flags: load_bazel_flags(),
+        bazel_flags: load_bazel_flags(&bazel_version),
+        startup_warning: version_message,
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

@@ -114,7 +114,7 @@ pub fn pretty_print(str: &str) -> Option<String> {
     if !errors.is_empty() {
         return None;
     }
-    let bazel_flags = load_bazel_flags();
+    let bazel_flags = load_bazel_flags("7.4.0");
     crate::bazel_flags::combine_key_value_flags(&mut lines, &bazel_flags);
     // TODO also support "single flag per command" and "single flag per line"
     // TODO strip duplicated empty lines directly following each other

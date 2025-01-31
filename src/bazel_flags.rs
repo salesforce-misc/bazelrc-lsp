@@ -47,12 +47,15 @@ pub struct BazelFlags {
 }
 
 impl BazelFlags {
-    pub fn from_flags(flags: Vec<FlagInfo>) -> BazelFlags {
+    pub fn from_flags(flags: Vec<FlagInfo>, bazel_version: &str) -> BazelFlags {
         // Index the flags from the protobuf description
         let mut flags_by_commands = HashMap::<String, Vec<usize>>::new();
         let mut flags_by_name = HashMap::<String, usize>::new();
         let mut flags_by_abbreviation = HashMap::<String, usize>::new();
         for (i, f) in flags.iter().enumerate() {
+            if !f.bazel_versions.iter().any(|v| v == bazel_version) {
+                continue;
+            }
             for c in &f.commands {
                 let list = flags_by_commands.entry(c.clone()).or_default();
                 list.push(i);
@@ -120,12 +123,15 @@ impl BazelFlags {
     }
 }
 
-pub fn load_bazel_flags() -> BazelFlags {
-    let proto_bytes = include_bytes!("../proto/flag-dumps/7.1.0.data");
-    let flags = FlagCollection::decode(&mut Cursor::new(proto_bytes))
-        .unwrap()
-        .flag_infos;
-    BazelFlags::from_flags(flags)
+pub fn load_bazel_flag_collection() -> FlagCollection {
+    let bazel_flags_proto: &[u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/bazel-flags-combined.data.lz4"));
+    let decompressed = lz4_flex::decompress_size_prepended(bazel_flags_proto).unwrap();
+    FlagCollection::decode(&mut Cursor::new(decompressed)).unwrap()
+}
+
+pub fn load_bazel_flags(bazel_version: &str) -> BazelFlags {
+    BazelFlags::from_flags(load_bazel_flag_collection().flag_infos, bazel_version)
 }
 
 fn escape_markdown(str: &str) -> String {
@@ -261,7 +267,7 @@ impl FlagInfo {
 
 #[test]
 fn test_flags() {
-    let flags = load_bazel_flags();
+    let flags = load_bazel_flags("7.1.0");
     let commands = flags.flags_by_commands.keys().cloned().collect::<Vec<_>>();
     assert!(commands.contains(&"build".to_string()));
     assert!(commands.contains(&"clean".to_string()));
@@ -287,19 +293,29 @@ fn test_flags() {
     );
 
     // The `remote_cache` is valid for at least one command. Hence, it should be in `common`.
-    let build_flag_id = flags
-        .flags
-        .iter()
-        .position(|f| f.name == "remote_cache")
-        .unwrap();
     assert!(flags
         .flags_by_commands
         .get("common")
         .unwrap()
-        .contains(&build_flag_id));
+        .iter()
+        .any(|id| { flags.flags[*id].name == "remote_cache" }));
     assert!(flags
         .flags_by_commands
         .get("always")
         .unwrap()
-        .contains(&build_flag_id));
+        .iter()
+        .any(|id| flags.flags[*id].name == "remote_cache"));
+}
+
+// Test that different flags are available in different Bazel versions
+#[test]
+fn test_flag_versions() {
+    let bazel7_flags = load_bazel_flags("7.0.0");
+    let bazel8_flags = load_bazel_flags("8.0.0");
+    let bazel9_flags = load_bazel_flags("9.0.0");
+
+    // `python3_path` was removed in Bazel 8
+    assert!(bazel7_flags.flags_by_name.contains_key("python3_path"));
+    assert!(!bazel8_flags.flags_by_name.contains_key("python3_path"));
+    assert!(!bazel9_flags.flags_by_name.contains_key("python3_path"));
 }

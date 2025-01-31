@@ -229,7 +229,7 @@ fn diagnose_string(str: &str) -> Vec<String> {
     } = parse_from_str(str);
     assert!(errors.is_empty());
 
-    let bazel_flags = load_bazel_flags();
+    let bazel_flags = load_bazel_flags("7.1.0");
     combine_key_value_flags(&mut lines, &bazel_flags);
     return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags, None)
         .iter_mut()

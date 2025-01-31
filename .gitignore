@@ -1,6 +1,6 @@
 /target
 /vscode-extension/dist/
-/flag-dumps
+/bazel-flags-cache
 node_modules
 .pnpm-debug.log
 *.vsix

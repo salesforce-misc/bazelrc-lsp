@@ -29,11 +29,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -47,6 +42,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
+            bazel-flags-cache/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
@@ -59,10 +55,10 @@ jobs:
           cargo clippy -- -D warnings
 
       - name: Test Language Server
-        run: cargo test --verbose
+        run: cargo test
 
       - name: Build Language Server
-        run: cargo build --release --verbose
+        run: cargo build --release
 
       - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v4
@@ -95,11 +91,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
