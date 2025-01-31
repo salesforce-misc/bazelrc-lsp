@@ -104,6 +104,24 @@ fn main() -> Result<()> {
         merge_flags_into(flags.flag_infos, &mut flags_by_name, version);
     }
 
+    // Hack to workaround https://github.com/salesforce-misc/bazelrc-lsp/issues/2
+    // Bazel used to have two `--watchfs` flags: A startup-flag and a build flag.
+    // The build flag is mising from the flag-dumps of older Bazel versions, and only
+    // the startup flag was included, which is marked as deprecated. Newer Bazel versions
+    // only report the non-deprecated build flag.
+    //
+    // We "back-port" this fix to earlier Bazel versions by patching the flags here.
+    let watchfs_flags = flags_by_name.remove("watchfs").unwrap();
+    let (mut deprecated_watchfs, mut non_deprecated_watchfs): (Vec<_>, Vec<_>) = watchfs_flags
+        .into_iter()
+        .partition(|f| f.metadata_tags.contains(&"DEPRECATED".to_string()));
+    for flag in &mut deprecated_watchfs {
+        non_deprecated_watchfs[0]
+            .bazel_versions
+            .append(&mut flag.bazel_versions);
+    }
+    flags_by_name.insert("watchfs".to_string(), non_deprecated_watchfs);
+
     // Write the combined flags into a file
     let flag_list = flags_by_name
         .into_iter()
