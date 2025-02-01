@@ -23,7 +23,7 @@ fn dump_flags(cache_dir: &Path, version: &str) -> Vec<u8> {
             .arg("help")
             .arg("flags-as-proto")
             .output()
-            .unwrap_or_else(|_| panic!("Failed to spawn Bazelisk for version {}", version));
+            .unwrap_or_else(|e| panic!("Failed to spawn Bazelisk for version {version}, {e}"));
         if !result.status.success() {
             panic!(
                 "Failed to get flags for Bazel version {version}:\n===stdout===\n{stdout}\n===stderr===\n{stderr}",
@@ -35,6 +35,12 @@ fn dump_flags(cache_dir: &Path, version: &str) -> Vec<u8> {
             .decode(result.stdout)
             .expect("Failed to decode Bazelisk output as base64");
         fs::write(cache_path, &flags_binary).expect("Failed to write flags to disk");
+        fs::write(cache_path.clone(), &flags_binary).unwrap_or_else(|e| {
+            panic!(
+                "Failed to write flags to disk at {}, {e}",
+                cache_path.display()
+            )
+        });
         flags_binary
     }
 }
