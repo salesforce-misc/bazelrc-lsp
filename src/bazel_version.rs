@@ -43,19 +43,19 @@ pub fn find_closest_version(available_version_strs: &[String], version_hint_str:
 // Use the Bazelisk logic to figure out the Bazel version
 pub fn determine_bazelisk_version(path: &Path) -> Option<String> {
     if let Ok(version_str) = env::var("USE_BAZEL_VERSION") {
-        return Some(version_str);
+        return Some(version_str.trim().to_string());
     }
     let workspace_root = get_workspace_path(path)?;
     if let Ok(bazeliskrc) = fs::read_to_string(workspace_root.join(".bazeliskrc")) {
         for line in bazeliskrc.split('\n') {
             if line.starts_with("USE_BAZEL_VERSION=") {
                 let version_str = &line.split_once('=').unwrap().1;
-                return Some(version_str.to_string());
+                return Some(version_str.trim().to_string());
             }
         }
         None
     } else if let Ok(bazelversion) = fs::read_to_string(workspace_root.join(".bazelversion")) {
-        return Some(bazelversion);
+        return Some(bazelversion.trim().to_string());
     } else {
         None
     }
