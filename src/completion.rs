@@ -45,7 +45,7 @@ fn complete_bazel_flag(
 
     let create_completion_item =
         |label: String, new_text: String, flag: &FlagInfo, commit_characters: Vec<String>| {
-            let tags = if flag.is_deprecated() {
+            let tags = if flag.is_deprecated() || flag.is_noop() {
                 Some(vec![CompletionItemTag::DEPRECATED])
             } else {
                 None

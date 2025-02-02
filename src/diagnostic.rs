@@ -79,6 +79,14 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                         tags: Some(vec![DiagnosticTag::DEPRECATED]),
                         ..Default::default()
                     });
+                } else if flag_description.is_noop() {
+                    diagnostics.push(Diagnostic {
+                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        message: format!("The flag {:?} is a no-op.", name.0),
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        tags: Some(vec![DiagnosticTag::DEPRECATED]),
+                        ..Default::default()
+                    });
                 }
             } else {
                 // Diagnose unknown flags
@@ -229,7 +237,7 @@ fn diagnose_string(str: &str) -> Vec<String> {
     } = parse_from_str(str);
     assert!(errors.is_empty());
 
-    let bazel_flags = load_bazel_flags("7.1.0");
+    let bazel_flags = load_bazel_flags("8.0.0");
     combine_key_value_flags(&mut lines, &bazel_flags);
     return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags, None)
         .iter_mut()
@@ -335,8 +343,13 @@ fn test_diagnose_flags() {
     );
     // Diagnose deprecated flags
     assert_eq!(
-        diagnose_string("common --expand_configs_in_place"),
-        vec!["The flag \"--expand_configs_in_place\" is deprecated."]
+        diagnose_string("common --legacy_whole_archive"),
+        vec!["The flag \"--legacy_whole_archive\" is deprecated."]
+    );
+    // Diagnose no_op flags
+    assert_eq!(
+        diagnose_string("common --incompatible_override_toolchain_transition"),
+        vec!["The flag \"--incompatible_override_toolchain_transition\" is a no-op."]
     );
 
     // Don't diagnose custom flags

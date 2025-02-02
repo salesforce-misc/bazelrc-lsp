@@ -210,7 +210,11 @@ pub fn combine_key_value_flags(lines: &mut [crate::parser::Line], bazel_flags: &
 
 impl FlagInfo {
     pub fn is_deprecated(&self) -> bool {
-        self.metadata_tags.contains(&"DEPRECATED".to_string())
+        self.metadata_tags.iter().any(|t| t == "DEPRECATED")
+    }
+
+    pub fn is_noop(&self) -> bool {
+        self.effect_tags.iter().any(|t| t == "NO_OP")
     }
 
     pub fn supports_command(&self, command: &str) -> bool {
