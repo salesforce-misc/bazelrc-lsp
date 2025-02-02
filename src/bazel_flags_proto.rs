@@ -41,8 +41,14 @@ pub struct FlagInfo {
     // The old, deprecated name for this option, without leading dashes.
     // TODO: Fix the tag number after the upstream Bazel change got merged.
     // See https://github.com/bazelbuild/bazel/pull/25169
-    #[prost(string, optional, tag = "99999")]
+    #[prost(string, optional, tag = "99998")]
     pub old_name: Option<::prost::alloc::string::String>,
+    // The deprecation warning for this option, if one is present.
+    // TODO: Fix the tag number after the upstream Bazel change got merged.
+    // See https://github.com/bazelbuild/bazel/pull/25169
+    #[prost(string, optional, tag = "99999")]
+    pub deprecation_warning: Option<::prost::alloc::string::String>,
+
     /// EXTENSION: List of Bazel versions this flag applies to
     #[prost(string, repeated, tag = "999")]
     pub bazel_versions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
