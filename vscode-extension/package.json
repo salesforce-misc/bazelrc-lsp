@@ -4,7 +4,7 @@
 	"displayName": "bazelrc language server",
 	"publisher": "Adrian Vogelsgesang",
 	"license": "Apache-2.0",
-	"version": "0.1.2",
+	"version": "0.2.1",
 	"categories": [
 		"Programming Languages",
 		"Formatters",
