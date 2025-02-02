@@ -225,7 +225,7 @@ pub fn diagnostics_from_rcconfig(
 #[cfg(test)]
 fn diagnose_string(str: &str) -> Vec<String> {
     use crate::bazel_flags::combine_key_value_flags;
-    use crate::bazel_flags::load_bazel_flags;
+    use crate::bazel_flags::load_packaged_bazel_flags;
     use crate::parser::parse_from_str;
     use crate::parser::ParserResult;
 
@@ -237,7 +237,7 @@ fn diagnose_string(str: &str) -> Vec<String> {
     } = parse_from_str(str);
     assert!(errors.is_empty());
 
-    let bazel_flags = load_bazel_flags("8.0.0");
+    let bazel_flags = load_packaged_bazel_flags("8.0.0");
     combine_key_value_flags(&mut lines, &bazel_flags);
     return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags, None)
         .iter_mut()

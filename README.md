@@ -23,6 +23,9 @@ The exact Bazel version is selected the same way as in Bazelisk:
 If a `USE_BAZEL_VERSION` environment variable is present, then this environment variable is authorative.
 Otherwise, the Bazel version will be determined from the `.bazeliskrc` or the `.bazelversion` file.
 
+Alternatively, the language server can also invoke Bazel to request an up-to-date list of supported flags.
+To do so, set the enviornment variable `BAZELRC_LSP_RUN_BAZEL_PATH` to point to your Bazel binary.
+
 ## Current State & Roadmap
 
 The extension is complete enough for my personal needs and hopefully useful to you, too.
@@ -51,8 +54,8 @@ Contributions are welcome. Feel free to just open a pull request.
 * Bazel version support
   * ✔ load flags from Bazel's flag dump
   * ✔ pack multiple flag versions & auto-detect version
-  * run `bazel help flags-as-proto` at runtime
-* Support flags with same name on different commands. E.g., `--watchfs` which is deprecated as a startup action, but still is supported as a flag to the `build` command
+  * ✔ run `bazel help flags-as-proto` at runtime based on environment variable
+  * expose settings in VS-Code extension
 * ✔ Syntax highlighting / semantic tokens
 * Diagnose
   * ✔ unknown flags

@@ -2,7 +2,7 @@ use ropey::Rope;
 use tower_lsp::lsp_types::TextEdit;
 
 use crate::{
-    bazel_flags::load_bazel_flags,
+    bazel_flags::load_packaged_bazel_flags,
     lsp_utils::range_to_lsp,
     parser::{parse_from_str, Line, ParserResult},
 };
@@ -114,7 +114,7 @@ pub fn pretty_print(str: &str) -> Option<String> {
     if !errors.is_empty() {
         return None;
     }
-    let bazel_flags = load_bazel_flags("7.4.0");
+    let bazel_flags = load_packaged_bazel_flags("7.4.0");
     crate::bazel_flags::combine_key_value_flags(&mut lines, &bazel_flags);
     // TODO also support "single flag per command" and "single flag per line"
     // TODO strip duplicated empty lines directly following each other

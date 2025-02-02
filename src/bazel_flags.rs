@@ -1,6 +1,7 @@
+use base64::prelude::*;
 use phf::phf_map;
 use prost::Message;
-use std::{collections::HashMap, io::Cursor};
+use std::{collections::HashMap, io::Cursor, process::Command};
 
 use crate::bazel_flags_proto::{FlagCollection, FlagInfo};
 
@@ -47,13 +48,15 @@ pub struct BazelFlags {
 }
 
 impl BazelFlags {
-    pub fn from_flags(flags: Vec<FlagInfo>, bazel_version: &str) -> BazelFlags {
+    pub fn from_flags(flags: Vec<FlagInfo>, bazel_version: Option<&str>) -> BazelFlags {
         // Index the flags from the protobuf description
         let mut flags_by_commands = HashMap::<String, Vec<usize>>::new();
         let mut flags_by_name = HashMap::<String, usize>::new();
         let mut flags_by_abbreviation = HashMap::<String, usize>::new();
         for (i, f) in flags.iter().enumerate() {
-            if !f.bazel_versions.iter().any(|v| v == bazel_version) {
+            if bazel_version.is_some()
+                && !f.bazel_versions.iter().any(|v| v == bazel_version.unwrap())
+            {
                 continue;
             }
             for c in &f.commands {
@@ -123,15 +126,45 @@ impl BazelFlags {
     }
 }
 
-pub fn load_bazel_flag_collection() -> FlagCollection {
+pub fn load_packaged_bazel_flag_collection() -> FlagCollection {
     let bazel_flags_proto: &[u8] =
         include_bytes!(concat!(env!("OUT_DIR"), "/bazel-flags-combined.data.lz4"));
     let decompressed = lz4_flex::decompress_size_prepended(bazel_flags_proto).unwrap();
     FlagCollection::decode(&mut Cursor::new(decompressed)).unwrap()
 }
 
-pub fn load_bazel_flags(bazel_version: &str) -> BazelFlags {
-    BazelFlags::from_flags(load_bazel_flag_collection().flag_infos, bazel_version)
+pub fn load_packaged_bazel_flags(bazel_version: &str) -> BazelFlags {
+    BazelFlags::from_flags(
+        load_packaged_bazel_flag_collection().flag_infos,
+        Some(bazel_version),
+    )
+}
+
+pub fn load_bazel_flags_from_command(bazel_command: &str) -> Result<BazelFlags, String> {
+    let result = Command::new(bazel_command)
+        .arg("help")
+        .arg("flags-as-proto")
+        .output()
+        .map_err(|err| err.to_string())?;
+    if !result.status.success() {
+        let msg = format!(
+            "exited with code {code}:\n===stdout===\n{stdout}\n===stderr===\n{stderr}",
+            code = result.status.code().unwrap(),
+            stdout = String::from_utf8_lossy(&result.stdout),
+            stderr = String::from_utf8_lossy(&result.stderr)
+        );
+        return Err(msg);
+    }
+    let flags_binary = BASE64_STANDARD.decode(&result.stdout).map_err(|_err| {
+        format!(
+            "failed to base64-decode output as base64: {}",
+            String::from_utf8_lossy(&result.stdout)
+        )
+    })?;
+    let flags = FlagCollection::decode(&mut Cursor::new(flags_binary))
+        .map_err(|_err| "failed to decode protobuf flags")?;
+
+    Ok(BazelFlags::from_flags(flags.flag_infos, None))
 }
 
 fn escape_markdown(str: &str) -> String {
@@ -271,7 +304,7 @@ impl FlagInfo {
 
 #[test]
 fn test_flags() {
-    let flags = load_bazel_flags("7.1.0");
+    let flags = load_packaged_bazel_flags("7.1.0");
     let commands = flags.flags_by_commands.keys().cloned().collect::<Vec<_>>();
     assert!(commands.contains(&"build".to_string()));
     assert!(commands.contains(&"clean".to_string()));
@@ -314,9 +347,9 @@ fn test_flags() {
 // Test that different flags are available in different Bazel versions
 #[test]
 fn test_flag_versions() {
-    let bazel7_flags = load_bazel_flags("7.0.0");
-    let bazel8_flags = load_bazel_flags("8.0.0");
-    let bazel9_flags = load_bazel_flags("9.0.0");
+    let bazel7_flags = load_packaged_bazel_flags("7.0.0");
+    let bazel8_flags = load_packaged_bazel_flags("8.0.0");
+    let bazel9_flags = load_packaged_bazel_flags("9.0.0");
 
     // `python3_path` was removed in Bazel 8
     assert!(bazel7_flags.flags_by_name.contains_key("python3_path"));

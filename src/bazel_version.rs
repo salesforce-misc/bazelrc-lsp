@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 
-use crate::{bazel_flags::load_bazel_flag_collection, file_utils::get_workspace_path};
+use crate::{bazel_flags::load_packaged_bazel_flag_collection, file_utils::get_workspace_path};
 use std::{env, fs, path::Path};
 
 type BazelVersion = (i16, i16, i16);
@@ -61,29 +61,24 @@ pub fn determine_bazelisk_version(path: &Path) -> Option<String> {
     }
 }
 
-static AVAILABLE_BAZEL_VERSIONS: Lazy<Vec<String>> =
-    Lazy::new(|| load_bazel_flag_collection().all_bazel_versions);
+pub static AVAILABLE_BAZEL_VERSIONS: Lazy<Vec<String>> =
+    Lazy::new(|| load_packaged_bazel_flag_collection().all_bazel_versions);
 
-pub fn auto_detect_bazel_version() -> (String, Option<String>) {
+pub fn auto_detect_bazel_version() -> Option<(String, Option<String>)> {
     if let Some(bazelisk_version) = determine_bazelisk_version(&env::current_dir().ok().unwrap()) {
         let bazel_version =
             find_closest_version(AVAILABLE_BAZEL_VERSIONS.as_slice(), &bazelisk_version);
         if bazel_version == bazelisk_version {
-            (bazel_version, None)
+            Some((bazel_version, None))
         } else {
             let message = format!(
                 "Using flags from Bazel {} because flags for version {} are not available",
                 bazel_version, bazelisk_version
             );
-            (bazel_version, Some(message))
+            Some((bazel_version, Some(message)))
         }
     } else {
-        let bazel_version = find_closest_version(AVAILABLE_BAZEL_VERSIONS.as_slice(), "latest");
-        let message = format!(
-            "Using flags from Bazel {} because auto-detecting the Bazel version failed",
-            bazel_version
-        );
-        (bazel_version, Some(message))
+        None
     }
 }
 
