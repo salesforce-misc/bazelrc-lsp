@@ -142,6 +142,9 @@ pub fn load_packaged_bazel_flags(bazel_version: &str) -> BazelFlags {
 
 pub fn load_bazel_flags_from_command(bazel_command: &str) -> Result<BazelFlags, String> {
     let result = Command::new(bazel_command)
+        // Disable bazelrc loading. Otherwise, with an invalid bazelrc, the `bazel help`
+        // command might fail.
+        .arg("--ignore_all_rc_files")
         .arg("help")
         .arg("flags-as-proto")
         .output()
