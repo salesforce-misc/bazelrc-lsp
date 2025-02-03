@@ -6,7 +6,9 @@ use ropey::Rope;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
 
 use crate::{
-    bazel_flags::BazelFlags, file_utils::resolve_bazelrc_path, lsp_utils::range_to_lsp,
+    bazel_flags::{BazelFlags, FlagLookupType},
+    file_utils::resolve_bazelrc_path,
+    lsp_utils::range_to_lsp,
     parser::Line,
 };
 
@@ -62,7 +64,9 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                 .any(|prefix| name.0.starts_with(prefix))
             {
                 // Don't diagnose custom settings at all
-            } else if let Some(flag_description) = bazel_flags.get_by_invocation(&name.0) {
+            } else if let Some((lookup_type, flag_description)) =
+                bazel_flags.get_by_invocation(&name.0)
+            {
                 // Diagnose flags used on the wrong command
                 if !flag_description.supports_command(command) {
                     diagnostics.push(Diagnostic::new_simple(
@@ -84,7 +88,27 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                         range: range_to_lsp(rope, &name.1).unwrap(),
                         message: format!("The flag {:?} is a no-op.", name.0),
                         severity: Some(DiagnosticSeverity::WARNING),
+                        ..Default::default()
+                    });
+                } else if lookup_type == FlagLookupType::OldName {
+                    diagnostics.push(Diagnostic {
+                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        message: format!(
+                            "The flag {:?} was renamed to \"--{}\".",
+                            name.0, flag_description.name
+                        ),
                         tags: Some(vec![DiagnosticTag::DEPRECATED]),
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        ..Default::default()
+                    });
+                } else if lookup_type == FlagLookupType::Abbreviation {
+                    diagnostics.push(Diagnostic {
+                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        message: format!(
+                            "Use the full name {:?} instead of its abbreviation.",
+                            flag_description.name
+                        ),
+                        severity: Some(DiagnosticSeverity::WARNING),
                         ..Default::default()
                     });
                 }
@@ -350,6 +374,11 @@ fn test_diagnose_flags() {
     assert_eq!(
         diagnose_string("common --incompatible_override_toolchain_transition"),
         vec!["The flag \"--incompatible_override_toolchain_transition\" is a no-op."]
+    );
+    // Diagnose abbreviated flag names
+    assert_eq!(
+        diagnose_string("build -k"),
+        vec!["Use the full name \"keep_going\" instead of its abbreviation."]
     );
 
     // Don't diagnose custom flags

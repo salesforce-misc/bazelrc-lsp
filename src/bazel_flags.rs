@@ -47,6 +47,13 @@ pub struct BazelFlags {
     pub flags_by_abbreviation: HashMap<String, usize>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FlagLookupType {
+    Normal,
+    Abbreviation,
+    OldName,
+}
+
 impl BazelFlags {
     pub fn from_flags(flags: Vec<FlagInfo>, bazel_version: Option<&str>) -> BazelFlags {
         // Index the flags from the protobuf description
@@ -59,11 +66,14 @@ impl BazelFlags {
             {
                 continue;
             }
+            flags_by_name.insert(f.name.clone(), i);
+            if let Some(old_name) = &f.old_name {
+                flags_by_name.insert(old_name.clone(), i);
+            }
             for c in &f.commands {
                 let list = flags_by_commands.entry(c.clone()).or_default();
                 list.push(i);
             }
-            flags_by_name.insert(f.name.clone(), i);
             if let Some(abbreviation) = &f.abbreviation {
                 flags_by_abbreviation.insert(abbreviation.clone(), i);
             }
@@ -98,7 +108,7 @@ impl BazelFlags {
         }
     }
 
-    pub fn get_by_invocation(&self, s: &str) -> Option<&FlagInfo> {
+    pub fn get_by_invocation(&self, s: &str) -> Option<(FlagLookupType, &FlagInfo)> {
         let stripped = s.strip_suffix('=').unwrap_or(s);
         // Long names
         if let Some(long_name) = stripped.strip_prefix("--") {
@@ -107,10 +117,17 @@ impl BazelFlags {
             }
             // Strip the `no` prefix, if any
             let stripped_no = long_name.strip_prefix("no").unwrap_or(long_name);
-            return self
-                .flags_by_name
-                .get(stripped_no)
-                .map(|i| self.flags.get(*i).unwrap());
+            return self.flags_by_name.get(stripped_no).map(|i| {
+                let flag = self.flags.get(*i).unwrap();
+                let old_name =
+                    flag.old_name.is_some() && flag.old_name.as_ref().unwrap() == stripped_no;
+                let lookup_mode = if old_name {
+                    FlagLookupType::OldName
+                } else {
+                    FlagLookupType::Normal
+                };
+                (lookup_mode, flag)
+            });
         }
         // Short names
         if let Some(abbreviation) = stripped.strip_prefix('-') {
@@ -120,7 +137,7 @@ impl BazelFlags {
             return self
                 .flags_by_abbreviation
                 .get(abbreviation)
-                .map(|i| self.flags.get(*i).unwrap());
+                .map(|i| (FlagLookupType::Abbreviation, self.flags.get(*i).unwrap()));
         }
         None
     }
@@ -210,7 +227,7 @@ pub fn combine_key_value_flags(lines: &mut [crate::parser::Line], bazel_flags: &
             new_flags.push(
                 || -> Option<Spanned<String>> {
                     let flag_name = &flag.name.as_ref()?.0;
-                    let info = bazel_flags.get_by_invocation(flag_name)?;
+                    let (_, info) = bazel_flags.get_by_invocation(flag_name)?;
                     if flag.value.is_some() {
                         return flag.value.clone();
                     } else if info.requires_value() {
@@ -321,6 +338,7 @@ fn test_flags() {
     assert_eq!(
         preemptible_info
             .unwrap()
+            .1
             .commands
             .iter()
             .map(|n| n.to_string())
@@ -330,8 +348,16 @@ fn test_flags() {
 
     // Supports both short and long forms
     assert_eq!(
-        flags.get_by_invocation("-k"),
-        flags.get_by_invocation("--keep_going")
+        flags.get_by_invocation("-k").unwrap().0,
+        FlagLookupType::Abbreviation
+    );
+    assert_eq!(
+        flags.get_by_invocation("--keep_going").unwrap().0,
+        FlagLookupType::Normal
+    );
+    assert_eq!(
+        flags.get_by_invocation("-k").unwrap().1,
+        flags.get_by_invocation("--keep_going").unwrap().1
     );
 
     // The `remote_cache` is valid for at least one command. Hence, it should be in `common`.

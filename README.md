@@ -63,22 +63,23 @@ Backlog items:
 * Diagnose
   * ✔ unknown flags
   * ✔ allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
-  * repeated flags
-  * abbreviated flag names; prefer non-abbreviated flags
+  * ✔ abbreviated flag names; prefer non-abbreviated flags
+  * when using an old, deprecated name (blocked on [up-stream Bazel change](https://github.com/bazelbuild/bazel/pull/25169))
   * ✔ diagnose deprecated flags
   * ✔ diagnose missing `import`ed files
   * ✔ configs on `startup`, `import`, `try-import`
   * ✔ empty config name
   * ✔ config name which doesn't match `[a-z_\-]+` (or similar)
+  * repeated flags
   * offer fix-it:
-    * to remove repeated flags
     * to replace abbreviated flags by non-abbreviated flags
     * to remove deprecated no-op flags
-    * to fix config-name-related issues
-* ✔ Hover
+    * to remove repeated flags
+* Hover
   * ✔ Show documentation of flags on hover
   * ✔ Correctly escape `<>` in Markdown (e.g. problematic in the documentation for `--config`)
   * Link to flag documentation in hovers
+  * Expose default value, value description (blocked on [up-stream Bazel change](https://github.com/bazelbuild/bazel/pull/25169))
   * ✔ Show documentation for commands on hover
 * Autocomplete
   * ✔ auto complete command names
@@ -109,8 +110,6 @@ Backlog items:
   * write documentation, including explanation of different styles
 * ✔ link file names for `import` & `try-import`
 * Rename functionality for config names
-* Bazel-side changes:
-  * expose default value, value description and old names and deprecation messages
 * Go to Reference:
-  * other usages of config name
-  * find other usages of same flag
+  * Other usages of config name
+  * Find other usages of same flag

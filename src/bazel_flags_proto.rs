@@ -38,10 +38,16 @@ pub struct FlagInfo {
     /// e.g. --jobs=100.
     #[prost(bool, optional, tag = "10")]
     pub requires_value: ::core::option::Option<bool>,
+    // The old, deprecated name for this option, without leading dashes.
+    // TODO: Fix the tag number after the upstream Bazel change got merged.
+    // See https://github.com/bazelbuild/bazel/pull/25169
+    #[prost(string, optional, tag = "99999")]
+    pub old_name: Option<::prost::alloc::string::String>,
     /// EXTENSION: List of Bazel versions this flag applies to
     #[prost(string, repeated, tag = "999")]
     pub bazel_versions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FlagCollection {
     #[prost(message, repeated, tag = "1")]
