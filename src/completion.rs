@@ -45,7 +45,8 @@ fn complete_bazel_flag(
 
     let create_completion_item =
         |label: String, new_text: String, flag: &FlagInfo, commit_characters: Vec<String>| {
-            let tags = if flag.is_deprecated() || flag.is_noop() {
+            let is_deprecated = flag.get_deprecation_message().is_some() || flag.is_noop();
+            let tags = if is_deprecated {
                 Some(vec![CompletionItemTag::DEPRECATED])
             } else {
                 None
@@ -57,7 +58,7 @@ fn complete_bazel_flag(
                 text_edit: Some(CompletionTextEdit::Edit(TextEdit { range, new_text })),
                 commit_characters: Some(commit_characters),
                 tags,
-                deprecated: Some(flag.is_deprecated()),
+                deprecated: Some(is_deprecated),
                 ..Default::default()
             }
         };

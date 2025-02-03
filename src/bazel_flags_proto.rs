@@ -41,6 +41,9 @@ pub struct FlagInfo {
     // The old, deprecated name for this option, without leading dashes.
     #[prost(string, optional, tag = "11")]
     pub old_name: Option<::prost::alloc::string::String>,
+    // The old, deprecated name for this option, without leading dashes.
+    #[prost(string, optional, tag = "12")]
+    pub deprecation_message: Option<::prost::alloc::string::String>,
     /// EXTENSION: List of Bazel versions this flag applies to
     #[prost(string, repeated, tag = "999")]
     pub bazel_versions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,

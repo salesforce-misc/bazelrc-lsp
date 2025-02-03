@@ -73,10 +73,10 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                     ))
                 }
                 // Diagnose deprecated options
-                if flag_description.is_deprecated() {
+                if let Some(deprecation_msg) = flag_description.get_deprecation_message() {
                     diagnostics.push(Diagnostic {
                         range: range_to_lsp(rope, &name.1).unwrap(),
-                        message: format!("The flag {:?} is deprecated.", name.0),
+                        message: deprecation_msg,
                         severity: Some(DiagnosticSeverity::WARNING),
                         tags: Some(vec![DiagnosticTag::DEPRECATED]),
                         ..Default::default()

@@ -119,7 +119,8 @@ impl BazelFlags {
             let stripped_no = long_name.strip_prefix("no").unwrap_or(long_name);
             return self.flags_by_name.get(stripped_no).map(|i| {
                 let flag = self.flags.get(*i).unwrap();
-                let old_name = flag.old_name.is_some() && flag.old_name.as_ref().unwrap() == stripped_no;
+                let old_name =
+                    flag.old_name.is_some() && flag.old_name.as_ref().unwrap() == stripped_no;
                 let lookup_mode = if old_name {
                     FlagLookupType::OldName
                 } else {
@@ -261,8 +262,18 @@ pub fn combine_key_value_flags(lines: &mut [crate::parser::Line], bazel_flags: &
 }
 
 impl FlagInfo {
-    pub fn is_deprecated(&self) -> bool {
-        self.metadata_tags.iter().any(|t| t == "DEPRECATED")
+    pub fn get_deprecation_message(&self) -> Option<String> {
+        if let Some(msg) = &self.deprecation_message {
+            if msg.to_ascii_lowercase().contains("deprecated") {
+                Some(msg.clone())
+            } else {
+                Some(format!("The flag \"--{}\" is deprecated. {}", self.name, msg))
+            }
+        } else if self.metadata_tags.iter().any(|t| t == "DEPRECATED") {
+            Some(format!("The flag \"--{}\" is deprecated.", self.name))
+        } else {
+            None
+        }
     }
 
     pub fn is_noop(&self) -> bool {
@@ -344,8 +355,14 @@ fn test_flags() {
     );
 
     // Supports both short and long forms
-    assert_eq!(flags.get_by_invocation("-k").unwrap().0, FlagLookupType::Abbreviation);
-    assert_eq!(flags.get_by_invocation("--keep_going").unwrap().0, FlagLookupType::Normal);
+    assert_eq!(
+        flags.get_by_invocation("-k").unwrap().0,
+        FlagLookupType::Abbreviation
+    );
+    assert_eq!(
+        flags.get_by_invocation("--keep_going").unwrap().0,
+        FlagLookupType::Normal
+    );
     assert_eq!(
         flags.get_by_invocation("-k").unwrap().1,
         flags.get_by_invocation("--keep_going").unwrap().1
