@@ -28,21 +28,18 @@ impl BazelVersion {
 
 // Parse a Bazel version into a tuple of 3 integers
 // Use "99", i.e. the highest possible version if a part is missing
+// Parses pre-release versions, e.g. "pre.20240925.4" from "8.0.0-pre.20240925.4"
+// Parses forked versions and stores the fork owner, e.g. "GitHubUser" from "GitHubUser/8.0.0"
 fn parse_bazel_version(full_version_str: &str) -> Option<BazelVersion> {
-    let (fork_owner, version_str) = match full_version_str.find("/") {
-        Some(idx) => {
-            let (fork_owner, version_str) = full_version_str.split_at(idx);
-            (Some(fork_owner.to_string()), version_str)
-        }
+    let (fork_owner, version_str) = match full_version_str.split_once('/') {
+        Some((fork_owner, version_str)) => (Some(fork_owner.to_string()), version_str),
         None => (None, full_version_str),
     };
-    let (mut parts, pre_release) = match version_str.find("-") {
-        Some(idx) => {
-            let (parts, pre_release) = version_str.split_at(idx);
-            (parts.split('.'), Some(pre_release[1..].to_string()))
-        }
-        None => (version_str.split('.'), None),
+    let (version_str, pre_release) = match version_str.split_once('-') {
+        Some((version_str, pre_release)) => (version_str, Some(pre_release.to_string())),
+        None => (version_str, None),
     };
+    let mut parts = version_str.split('.');
     let major = parts.next()?.parse::<i16>().ok()?;
     let minor_str = parts.next().unwrap_or("");
     if minor_str == "*" || minor_str == "+" {
@@ -197,6 +194,26 @@ fn test_parse_bazel_version() {
             minor: 0,
             patch: 0,
             fork_owner: None,
+            pre_release: Some("pre.20210317.1".to_string())
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("GitHubUser/8.0.0"),
+        Some(BazelVersion {
+            major: 8,
+            minor: 0,
+            patch: 0,
+            fork_owner: Some("GitHubUser".to_string()),
+            pre_release: None
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("GitHubUser/9.1.2-pre.20210317.1"),
+        Some(BazelVersion {
+            major: 9,
+            minor: 1,
+            patch: 2,
+            fork_owner: Some("GitHubUser".to_string()),
             pre_release: Some("pre.20210317.1".to_string())
         })
     );
