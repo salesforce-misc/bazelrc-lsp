@@ -3,16 +3,56 @@ use once_cell::sync::Lazy;
 use crate::{bazel_flags::load_packaged_bazel_flag_collection, file_utils::get_workspace_path};
 use std::{env, fs, path::Path};
 
-type BazelVersion = (i16, i16, i16);
+#[derive(Debug, PartialEq)]
+struct BazelVersion {
+    major: i16,
+    minor: i16,
+    patch: i16,
+    fork_owner: Option<String>,
+    pre_release: Option<String>,
+}
+
+type BazelVersionTuple = (i16, i16, i16, Option<String>, Option<String>);
+
+impl BazelVersion {
+    fn as_tuple(&self) -> BazelVersionTuple {
+        (
+            self.major,
+            self.minor,
+            self.patch,
+            self.fork_owner.clone(),
+            self.pre_release.clone(),
+        )
+    }
+}
 
 // Parse a Bazel version into a tuple of 3 integers
 // Use "99", i.e. the highest possible version if a part is missing
-fn parse_bazel_version(version_str: &str) -> Option<BazelVersion> {
-    let mut parts = version_str.split('.');
+fn parse_bazel_version(full_version_str: &str) -> Option<BazelVersion> {
+    let (fork_owner, version_str) = match full_version_str.find("/") {
+        Some(idx) => {
+            let (fork_owner, version_str) = full_version_str.split_at(idx);
+            (Some(fork_owner.to_string()), version_str)
+        }
+        None => (None, full_version_str),
+    };
+    let (mut parts, pre_release) = match version_str.find("-") {
+        Some(idx) => {
+            let (parts, pre_release) = version_str.split_at(idx);
+            (parts.split('.'), Some(pre_release[1..].to_string()))
+        }
+        None => (version_str.split('.'), None),
+    };
     let major = parts.next()?.parse::<i16>().ok()?;
     let minor_str = parts.next().unwrap_or("");
     if minor_str == "*" || minor_str == "+" {
-        return Some((major, 99, 0));
+        return Some(BazelVersion {
+            major,
+            minor: 99,
+            patch: 0,
+            fork_owner,
+            pre_release,
+        });
     }
     let minor = minor_str.parse::<i16>().unwrap_or(0);
     let patch_digits = parts
@@ -22,18 +62,24 @@ fn parse_bazel_version(version_str: &str) -> Option<BazelVersion> {
         .take_while(|c| c.is_ascii_digit())
         .collect::<String>();
     let patch = patch_digits.parse::<i16>().unwrap_or(99);
-    Some((major, minor, patch))
+    Some(BazelVersion {
+        major,
+        minor,
+        patch,
+        fork_owner,
+        pre_release,
+    })
 }
 
 // Find the closest available Bazel version
 pub fn find_closest_version(available_version_strs: &[String], version_hint_str: &str) -> String {
     let mut available_versions = available_version_strs
         .iter()
-        .map(|s| (parse_bazel_version(s).unwrap(), s))
+        .map(|s| (parse_bazel_version(s).unwrap().as_tuple(), s))
         .collect::<Vec<_>>();
     available_versions.sort();
     if let Some(version_hint) = parse_bazel_version(version_hint_str) {
-        let match_idx = available_versions.partition_point(|e| e.0 <= version_hint);
+        let match_idx = available_versions.partition_point(|e| e.0 <= version_hint.as_tuple());
         available_versions[match_idx.saturating_sub(1)].1.clone()
     } else {
         available_versions.last().unwrap().1.clone()
@@ -84,13 +130,76 @@ pub fn auto_detect_bazel_version() -> Option<(String, Option<String>)> {
 
 #[test]
 fn test_parse_bazel_version() {
-    assert_eq!(parse_bazel_version("7.1.2"), Some((7, 1, 2)));
-    assert_eq!(parse_bazel_version("7.*"), Some((7, 99, 0)));
-    assert_eq!(parse_bazel_version("7.+"), Some((7, 99, 0)));
-    assert_eq!(parse_bazel_version("7."), Some((7, 0, 99)));
-    assert_eq!(parse_bazel_version("7"), Some((7, 0, 99)));
-    assert_eq!(parse_bazel_version("8.1.1rc3"), Some((8, 1, 1)));
-    assert_eq!(parse_bazel_version("9.0.0-pre.20210317.1"), Some((9, 0, 0)));
+    assert_eq!(
+        parse_bazel_version("7.1.2"),
+        Some(BazelVersion {
+            major: 7,
+            minor: 1,
+            patch: 2,
+            fork_owner: None,
+            pre_release: None
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("7.*"),
+        Some(BazelVersion {
+            major: 7,
+            minor: 99,
+            patch: 0,
+            fork_owner: None,
+            pre_release: None
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("7.+"),
+        Some(BazelVersion {
+            major: 7,
+            minor: 99,
+            patch: 0,
+            fork_owner: None,
+            pre_release: None
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("7."),
+        Some(BazelVersion {
+            major: 7,
+            minor: 0,
+            patch: 99,
+            fork_owner: None,
+            pre_release: None
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("7"),
+        Some(BazelVersion {
+            major: 7,
+            minor: 0,
+            patch: 99,
+            fork_owner: None,
+            pre_release: None
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("8.1.1rc3"),
+        Some(BazelVersion {
+            major: 8,
+            minor: 1,
+            patch: 1,
+            fork_owner: None,
+            pre_release: None
+        })
+    );
+    assert_eq!(
+        parse_bazel_version("9.0.0-pre.20210317.1"),
+        Some(BazelVersion {
+            major: 9,
+            minor: 0,
+            patch: 0,
+            fork_owner: None,
+            pre_release: Some("pre.20210317.1".to_string())
+        })
+    );
 }
 
 #[test]
