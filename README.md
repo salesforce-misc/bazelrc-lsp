@@ -60,18 +60,18 @@ Contributions are welcome. Feel free to just open a pull request.
 * Diagnose
   * ✔ unknown flags
   * ✔ allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
-  * repeated flags
-  * abbreviated flag names; prefer non-abbreviated flags
+  * ✔ abbreviated flag names; prefer non-abbreviated flags
+  * ✔ when using an old, deprecated name
   * ✔ diagnose deprecated flags
   * ✔ diagnose missing `import`ed files
   * ✔ configs on `startup`, `import`, `try-import`
   * ✔ empty config name
   * ✔ config name which doesn't match `[a-z_\-]+` (or similar)
+  * repeated flags
   * offer fix-it:
-    * to remove repeated flags
     * to replace abbreviated flags by non-abbreviated flags
     * to remove deprecated no-op flags
-    * to fix config-name-related issues
+    * to remove repeated flags
 * ✔ Hover
   * ✔ Show documentation of flags on hover
   * ✔ Correctly escape `<>` in Markdown (e.g. problematic in the documentation for `--config`)

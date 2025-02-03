@@ -276,7 +276,7 @@ impl LanguageServer for Backend {
                 IndexEntryKind::FlagValue(flag_nr) | IndexEntryKind::FlagName(flag_nr) => {
                     let line = &doc.indexed_lines.lines[*line_nr];
                     let flag_name = &line.flags.get(*flag_nr)?.name.as_ref()?.0;
-                    let flag_info = self.bazel_flags.get_by_invocation(flag_name)?;
+                    let (_, flag_info) = self.bazel_flags.get_by_invocation(flag_name)?;
                     let content = flag_info.get_documentation_markdown();
                     let contents = HoverContents::Scalar(MarkedString::String(content));
                     Some(Hover {
