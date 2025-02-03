@@ -5,7 +5,7 @@ use std::{collections::HashMap, env, fs, io::Result, path::Path, process::Comman
 include!("src/bazel_flags_proto.rs");
 
 fn dump_flags(cache_dir: &Path, version: &str) -> Vec<u8> {
-    let cache_path = cache_dir.join(format!("flags-{version}.data"));
+    let cache_path = cache_dir.join(format!("flags-dumps/{version}.data"));
     if cache_path.exists() {
         fs::read(cache_path).unwrap()
     } else {
@@ -23,7 +23,7 @@ fn dump_flags(cache_dir: &Path, version: &str) -> Vec<u8> {
             .arg("help")
             .arg("flags-as-proto")
             .output()
-            .unwrap_or_else(|_| panic!("Failed to spawn Bazelisk for version {}", version));
+            .unwrap_or_else(|e| panic!("Failed to spawn Bazelisk for version {version}, {e}"));
         if !result.status.success() {
             panic!(
                 "Failed to get flags for Bazel version {version}:\n===stdout===\n{stdout}\n===stderr===\n{stderr}",
@@ -34,7 +34,20 @@ fn dump_flags(cache_dir: &Path, version: &str) -> Vec<u8> {
         let flags_binary = BASE64_STANDARD
             .decode(result.stdout)
             .expect("Failed to decode Bazelisk output as base64");
-        fs::write(cache_path, &flags_binary).expect("Failed to write flags to disk");
+        if let Some(parent) = cache_path.parent() {
+            fs::create_dir_all(parent).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to create directory at {} for flags, {e}",
+                    parent.display()
+                )
+            });
+        }
+        fs::write(cache_path.clone(), &flags_binary).unwrap_or_else(|e| {
+            panic!(
+                "Failed to write flags to disk at {}, {e}",
+                cache_path.display()
+            )
+        });
         flags_binary
     }
 }
