@@ -69,17 +69,30 @@ fn parse_bazel_version(full_version_str: &str) -> Option<BazelVersion> {
 }
 
 // Find the closest available Bazel version
-pub fn find_closest_version(available_version_strs: &[String], version_hint_str: &str) -> String {
+pub fn find_closest_version(
+    available_version_strs: &[String],
+    version_hint_str: &str,
+) -> (String, Option<String>) {
     let mut available_versions = available_version_strs
         .iter()
         .map(|s| (parse_bazel_version(s).unwrap().as_tuple(), s))
         .collect::<Vec<_>>();
     available_versions.sort();
-    if let Some(version_hint) = parse_bazel_version(version_hint_str) {
+    let bazel_version = if let Some(version_hint) = parse_bazel_version(version_hint_str) {
         let match_idx = available_versions.partition_point(|e| e.0 <= version_hint.as_tuple());
         available_versions[match_idx.saturating_sub(1)].1.clone()
     } else {
         available_versions.last().unwrap().1.clone()
+    };
+
+    if bazel_version == version_hint_str {
+        (bazel_version, None)
+    } else {
+        let message = format!(
+            "Using flags from Bazel {} because flags for version {} are not available",
+            bazel_version, version_hint_str
+        );
+        (bazel_version, Some(message))
     }
 }
 
@@ -107,24 +120,6 @@ pub fn determine_bazelisk_version(path: &Path) -> Option<String> {
 
 pub static AVAILABLE_BAZEL_VERSIONS: Lazy<Vec<String>> =
     Lazy::new(|| load_packaged_bazel_flag_collection().all_bazel_versions);
-
-pub fn auto_detect_bazel_version() -> Option<(String, Option<String>)> {
-    if let Some(bazelisk_version) = determine_bazelisk_version(&env::current_dir().ok().unwrap()) {
-        let bazel_version =
-            find_closest_version(AVAILABLE_BAZEL_VERSIONS.as_slice(), &bazelisk_version);
-        if bazel_version == bazelisk_version {
-            Some((bazel_version, None))
-        } else {
-            let message = format!(
-                "Using flags from Bazel {} because flags for version {} are not available",
-                bazel_version, bazelisk_version
-            );
-            Some((bazel_version, Some(message)))
-        }
-    } else {
-        None
-    }
-}
 
 #[test]
 fn test_parse_bazel_version() {
@@ -236,37 +231,43 @@ fn test_find_closest_version() {
     ];
     let version_strings = versions.map(|s| s.to_string());
     // Versions with an exact match
-    assert_eq!(find_closest_version(&version_strings, "7.1.1"), "7.1.1");
-    assert_eq!(find_closest_version(&version_strings, "7.2.0"), "7.2.0");
+    assert_eq!(find_closest_version(&version_strings, "7.1.1").0, "7.1.1");
+    assert_eq!(find_closest_version(&version_strings, "7.2.0").0, "7.2.0");
     // An outdated version for which we no longer provide flags data
-    assert_eq!(find_closest_version(&version_strings, "5.0.0"), "7.0.0");
-    assert_eq!(find_closest_version(&version_strings, "5.1.1"), "7.0.0");
+    assert_eq!(find_closest_version(&version_strings, "5.0.0").0, "7.0.0");
+    assert_eq!(find_closest_version(&version_strings, "5.1.1").0, "7.0.0");
     // Release candidate versions
-    assert_eq!(find_closest_version(&version_strings, "7.1.1rc2"), "7.1.1");
-    assert_eq!(find_closest_version(&version_strings, "7.1.2rc2"), "7.1.2");
     assert_eq!(
-        find_closest_version(&version_strings, "7.1.2-pre.123434"),
+        find_closest_version(&version_strings, "7.1.1rc2").0,
+        "7.1.1"
+    );
+    assert_eq!(
+        find_closest_version(&version_strings, "7.1.2rc2").0,
+        "7.1.2"
+    );
+    assert_eq!(
+        find_closest_version(&version_strings, "7.1.2-pre.123434").0,
         "7.1.2"
     );
     // A newer patch version for which we don't have flags, yet
-    assert_eq!(find_closest_version(&version_strings, "7.1.4"), "7.1.2");
-    assert_eq!(find_closest_version(&version_strings, "7.2.3"), "7.2.0");
-    assert_eq!(find_closest_version(&version_strings, "8.0.2"), "8.0.1");
+    assert_eq!(find_closest_version(&version_strings, "7.1.4").0, "7.1.2");
+    assert_eq!(find_closest_version(&version_strings, "7.2.3").0, "7.2.0");
+    assert_eq!(find_closest_version(&version_strings, "8.0.2").0, "8.0.1");
     // A newer version, where we only have a pre-release version
     assert_eq!(
-        find_closest_version(&version_strings, "9.1.2"),
+        find_closest_version(&version_strings, "9.1.2").0,
         "9.0.0-pre.20250121.1"
     );
     // A partial version specification
-    assert_eq!(find_closest_version(&version_strings, "7.*"), "7.2.0");
-    assert_eq!(find_closest_version(&version_strings, "7.+"), "7.2.0");
-    assert_eq!(find_closest_version(&version_strings, "7.1"), "7.1.2");
+    assert_eq!(find_closest_version(&version_strings, "7.*").0, "7.2.0");
+    assert_eq!(find_closest_version(&version_strings, "7.+").0, "7.2.0");
+    assert_eq!(find_closest_version(&version_strings, "7.1").0, "7.1.2");
     assert_eq!(
-        find_closest_version(&version_strings, "latest"),
+        find_closest_version(&version_strings, "latest").0,
         "9.0.0-pre.20250121.1"
     );
     assert_eq!(
-        find_closest_version(&version_strings, "latest-1"),
+        find_closest_version(&version_strings, "latest-1").0,
         "9.0.0-pre.20250121.1"
     );
 }

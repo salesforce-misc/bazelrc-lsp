@@ -24,7 +24,8 @@ If a `USE_BAZEL_VERSION` environment variable is present, then this environment 
 Otherwise, the Bazel version will be determined from the `.bazeliskrc` or the `.bazelversion` file.
 
 Alternatively, the language server can also invoke Bazel to request an up-to-date list of supported flags.
-To do so, set the enviornment variable `BAZELRC_LSP_RUN_BAZEL_PATH` to point to your Bazel binary.
+To do so, point the environment variable `BAZELRC_LSP_RUN_BAZEL_PATH` to your Bazel binary or use the
+`--bazel-path` command line parameter.
 
 ## Current State & Roadmap
 

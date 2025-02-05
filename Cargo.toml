@@ -18,6 +18,7 @@ phf = { version = "0.11.3", features = ["macros"] }
 lz4_flex = "0.11"
 once_cell = "1.20.2"
 base64 = "0.22.1"
+clap = { version = "4.5.28", features = ["derive"] }
 
 [build-dependencies]
 prost = "0.13.4"
