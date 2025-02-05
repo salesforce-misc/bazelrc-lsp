@@ -84,6 +84,7 @@ pub fn find_closest_version(available_version_strs: &[String], version_hint_str:
 }
 
 // Use the Bazelisk logic to figure out the Bazel version
+// Ref: https://github.com/bazelbuild/bazelisk/blob/1f9a1aca958cdb50b4adb84b15cdda55a600ed31/README.md?plain=1#L45-L47
 pub fn determine_bazelisk_version(path: &Path) -> Option<String> {
     if let Ok(version_str) = env::var("USE_BAZEL_VERSION") {
         return Some(version_str.trim().to_string());
@@ -96,12 +97,12 @@ pub fn determine_bazelisk_version(path: &Path) -> Option<String> {
                 return Some(version_str.trim().to_string());
             }
         }
-        None
-    } else if let Ok(bazelversion) = fs::read_to_string(workspace_root.join(".bazelversion")) {
-        return Some(bazelversion.trim().to_string());
-    } else {
-        None
     }
+    if let Ok(bazelversion) = fs::read_to_string(workspace_root.join(".bazelversion")) {
+        return Some(bazelversion.trim().to_string());
+    }
+
+    None
 }
 
 pub static AVAILABLE_BAZEL_VERSIONS: Lazy<Vec<String>> =
