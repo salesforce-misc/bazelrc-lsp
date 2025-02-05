@@ -15,20 +15,16 @@ use tower_lsp::{LspService, Server};
 #[command(about = "Code Intelligence for bazelrc config files")]
 struct Cli {
     /// The Bazel version
-    #[arg(long, value_name = "VERSION")]
+    #[arg(long, value_name = "VERSION", group = "bazel-version")]
     bazel_version: Option<String>,
     /// Path to a Bazel version
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", group = "bazel-version")]
     bazel_path: Option<String>,
 }
 
 #[tokio::main]
 async fn main() {
     let mut cli = Cli::parse();
-    if cli.bazel_version.is_some() && cli.bazel_path.is_some() {
-        eprintln!("Either `--bazel-version` or `--bazel-path` can be set, but not both.");
-        std::process::exit(1);
-    }
     if cli.bazel_version.is_none() && cli.bazel_path.is_none() {
         // The bazel path can also provided as an environment variable
         cli.bazel_path = env::var("BAZELRC_LSP_RUN_BAZEL_PATH").ok();
@@ -74,4 +70,10 @@ fn load_bazel_flags(cli: &Cli) -> (BazelFlags, Option<String>) {
             "Using flags from Bazel {bazel_version} because auto-detecting the Bazel version failed");
         (load_packaged_bazel_flags(&bazel_version), Some(message))
     }
+}
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Cli::command().debug_assert();
 }
