@@ -6,6 +6,7 @@ pub mod definition;
 pub mod diagnostic;
 pub mod file_utils;
 pub mod formatting;
+pub mod language_server;
 pub mod line_index;
 pub mod lsp_utils;
 pub mod parser;
