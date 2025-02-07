@@ -101,10 +101,9 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
                 line.comment = Some((s.clone(), t.1.clone()));
             }
             Token::Newline => {
-                if let Some(mut l) = current_line.take() {
-                    l.span = current_line_start..t.1.end;
-                    result_lines.push(l);
-                }
+                let mut line = current_line.take().unwrap_or_default();
+                line.span = current_line_start..t.1.end;
+                result_lines.push(line);
                 current_line_start = t.1.end;
             }
             Token::EscapedNewline => (),
@@ -316,5 +315,47 @@ fn test_comments() {
             span: 0..12,
             ..Default::default()
         })
+    );
+}
+
+#[test]
+fn test_empty_lines() {
+    // Check that we keep also keep a representation for empty lines
+    assert_eq!(
+        parse_from_str("build --x=y\n\ncommon --z=w\n\n\n").lines,
+        vec!(
+            Line {
+                command: Some(("build".to_string(), 0..5)),
+                config: None,
+                flags: vec!(Flag {
+                    name: Some(("--x".to_string(), 6..9)),
+                    value: Some(("y".to_string(), 9..11))
+                }),
+                comment: None,
+                span: 0..12
+            },
+            Line {
+                span: 12..13,
+                ..Default::default()
+            },
+            Line {
+                command: Some(("common".to_string(), 13..19)),
+                config: None,
+                flags: vec!(Flag {
+                    name: Some(("--z".to_string(), 20..23)),
+                    value: Some(("w".to_string(), 23..25))
+                }),
+                comment: None,
+                span: 13..26
+            },
+            Line {
+                span: 26..27,
+                ..Default::default()
+            },
+            Line {
+                span: 27..28,
+                ..Default::default()
+            },
+        )
     );
 }

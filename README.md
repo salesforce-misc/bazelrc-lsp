@@ -95,11 +95,11 @@ Contributions are welcome. Feel free to just open a pull request.
     * "line reflowing" support (all on single line; one flag per line with `\` line continuations; one flag per command; ...)
     * compact multiple consecutive empty lines
     * break up multiline comments
-    * more aggressive reformatting of comments / smarter detection of ASCII art
+    * more aggressive reformatting of comments / smarter detection of Markdown, ASCII art etc.
   * ✔ LSP integration
     * ✔ whole document formatting
     * ✔ range formatting
-  * expose formatting through command line to enable integration into CI systems
+  * ✔ expose formatting through command line to enable integration into CI systems
 * ✔ link file names for `import` & `try-import`
 * Rename functionality for config names
 * Bazel-side changes:

@@ -1,0 +1,5 @@
+# Weird / unnecessary escapes
+build --x=a\ bc"1 2 3"
+
+# Weird whitespaces / new lines
+   build    --x   1
