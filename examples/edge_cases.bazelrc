@@ -34,7 +34,7 @@ build --disk_cache=
 # Invalid flag
 build --some_unknown_flag
 # Deprecated flag
-startup --watchfs
+startup --batch
 
 # Valid, combined flag
 build --copt --std=c++20
