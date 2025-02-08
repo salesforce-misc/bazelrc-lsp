@@ -180,7 +180,7 @@ fn test_tokens() {
     // Quoted parts can also appear in the middle of tokens
     assert_single_flag!("abc' cd\t e\\''fg\"h i\"j", "abc cd\t e'fgh ij");
 
-    // A whitespace seperates two tokens
+    // A whitespace separates two tokens
     assert_eq!(
         flags_only("ab c"),
         token_vec(&["ab".to_string(), "c".to_string()])

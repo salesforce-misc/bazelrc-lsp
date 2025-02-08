@@ -92,14 +92,19 @@ Contributions are welcome. Feel free to just open a pull request.
     * ✔ basic formatting support
     * ✔ always quote arguments to `import` / `try-import`
     * ✔ combine `--flag value` into `--flag=value`
-    * "line reflowing" support (all on single line; one flag per line with `\` line continuations; one flag per command; ...)
-    * compact multiple consecutive empty lines
-    * break up multiline comments
+    * ✔ "line reflowing" support (all on single line; one flag per line with `\` line continuations; one flag per command; ...)
+    * ✔ compact multiple consecutive empty lines
+    * break up multiline continuations in comments
     * more aggressive reformatting of comments / smarter detection of Markdown, ASCII art etc.
   * ✔ LSP integration
     * ✔ whole document formatting
     * ✔ range formatting
-  * ✔ expose formatting through command line to enable integration into CI systems
+  * expose formatting through command line to enable integration into CI systems
+    * ✔ stdin processing
+    * ✔ inplace updates for files
+    * ✔ `--check`-mode
+    * support enumerating all bazelrc files from a folder
+  * write documentation, including explanation of different styles
 * ✔ link file names for `import` & `try-import`
 * Rename functionality for config names
 * Bazel-side changes:

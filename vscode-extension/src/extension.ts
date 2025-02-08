@@ -1,4 +1,5 @@
 import {
+  workspace,
   type ExtensionContext
 } from 'vscode';
 
@@ -9,13 +10,14 @@ import {
   type ServerOptions
 } from 'vscode-languageclient/node';
 
-let client: LanguageClient | null = null;
-
-export async function activate (context: ExtensionContext) {
+async function startLsp (context: ExtensionContext) {
   const command = process.env.SERVER_PATH ?? context.asAbsolutePath('bazelrc-lsp');
+  const formatConfig = workspace.getConfiguration('bazelrc.format');
+  const lineFlow = formatConfig.get<string>('line-flow') ?? 'keep';
+
   const run: Executable = {
     command,
-    args: ["lsp"],
+    args: ['--format-lines', lineFlow, 'lsp'],
     options: {
       env: {
         ...process.env,
@@ -39,8 +41,22 @@ export async function activate (context: ExtensionContext) {
   };
 
   // Create the language client and start the client.
-  client = new LanguageClient('bazelrc-lsp', 'Bazelrc Language Server', serverOptions, clientOptions);
-  void client.start();
+  const client = new LanguageClient('bazelrc-lsp', 'Bazelrc Language Server', serverOptions, clientOptions);
+  await client.start();
+  return client;
+}
+
+let client: LanguageClient | null = null;
+
+export async function activate (context: ExtensionContext) {
+  client = await startLsp(context);
+
+  context.subscriptions.push(workspace.onDidChangeConfiguration(async (e) => {
+    if (e.affectsConfiguration('bazelrc.format.line-flow')) {
+      await client?.stop();
+      client = await startLsp(context);
+    }
+  }));
 }
 
 export function deactivate (): Thenable<void> | undefined {

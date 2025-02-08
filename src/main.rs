@@ -7,7 +7,7 @@ use bazelrc_lsp::bazel_flags::{
 use bazelrc_lsp::bazel_version::{
     determine_bazelisk_version, find_closest_version, AVAILABLE_BAZEL_VERSIONS,
 };
-use bazelrc_lsp::formatting::pretty_print;
+use bazelrc_lsp::formatting::{pretty_print, FormatLineFlow};
 use bazelrc_lsp::language_server::Backend;
 use clap::{Parser, Subcommand};
 use tower_lsp::{LspService, Server};
@@ -22,9 +22,38 @@ struct Cli {
     /// Path to a Bazel version
     #[arg(long, value_name = "PATH", group = "bazel-version")]
     bazel_path: Option<String>,
+    /// Should lines be combined / split when formatting bazelrc files?
+    #[arg(long, default_value = "keep")]
+    format_lines: FormatLineFlowCli,
 
     #[command(subcommand)]
     command: Option<Commands>,
+}
+
+#[derive(Clone, Copy)]
+struct FormatLineFlowCli(FormatLineFlow);
+impl clap::ValueEnum for FormatLineFlowCli {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[
+            FormatLineFlowCli(FormatLineFlow::Keep),
+            FormatLineFlowCli(FormatLineFlow::LineContinuation),
+            FormatLineFlowCli(FormatLineFlow::SeparateLines),
+            FormatLineFlowCli(FormatLineFlow::SingleLine),
+        ]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self.0 {
+            FormatLineFlow::Keep => Some(clap::builder::PossibleValue::new("keep")),
+            FormatLineFlow::LineContinuation => {
+                Some(clap::builder::PossibleValue::new("line-continuation"))
+            }
+            FormatLineFlow::SeparateLines => {
+                Some(clap::builder::PossibleValue::new("separate-lines"))
+            }
+            FormatLineFlow::SingleLine => Some(clap::builder::PossibleValue::new("single-line")),
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -74,6 +103,7 @@ async fn main() {
                 client,
                 document_map: Default::default(),
                 bazel_flags,
+                format_line_flow: cli.format_lines.0,
                 startup_warning: version_message,
             });
             Server::new(stdin, stdout, socket).serve(service).await;
@@ -82,7 +112,7 @@ async fn main() {
             if let Some(msg) = &version_message {
                 eprintln!("{}", msg);
             }
-            handle_format_cmd(&args, &bazel_flags);
+            handle_format_cmd(&args, &bazel_flags, cli.format_lines.0);
         }
     };
 }
@@ -115,11 +145,11 @@ fn load_bazel_flags(cli: &Cli) -> (BazelFlags, Option<String>) {
     }
 }
 
-fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags) {
+fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags, line_flow: FormatLineFlow) {
     let mut had_errors = false;
 
     let mut do_format = |input: String, file_name: Option<&str>| {
-        let result = pretty_print(&input, bazel_flags);
+        let result = pretty_print(&input, bazel_flags, line_flow);
         match result {
             Ok(formatted) => {
                 if args.check {

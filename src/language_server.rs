@@ -3,7 +3,7 @@ use crate::completion::get_completion_items;
 use crate::definition::get_definitions;
 use crate::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use crate::file_utils::resolve_bazelrc_path;
-use crate::formatting::get_text_edits_for_lines;
+use crate::formatting::{get_text_edits_for_lines, FormatLineFlow};
 use crate::line_index::{IndexEntry, IndexEntryKind, IndexedLines};
 use crate::lsp_utils::{lsp_pos_to_offset, range_to_lsp};
 use crate::parser::{parse_from_str, Line, ParserResult};
@@ -35,6 +35,7 @@ pub struct Backend {
     pub client: Client,
     pub document_map: DashMap<String, AnalyzedDocument>,
     pub bazel_flags: BazelFlags,
+    pub format_line_flow: FormatLineFlow,
     // An optional message which should be displayed to the user on startup
     pub startup_warning: Option<String>,
 }
@@ -297,7 +298,11 @@ impl LanguageServer for Backend {
 
         // Format all lines
         let lines = &doc.indexed_lines.lines;
-        Ok(Some(get_text_edits_for_lines(lines, rope)))
+        Ok(Some(get_text_edits_for_lines(
+            lines,
+            rope,
+            self.format_line_flow,
+        )))
     }
 
     async fn range_formatting(
@@ -331,6 +336,7 @@ impl LanguageServer for Backend {
         Ok(Some(get_text_edits_for_lines(
             &all_lines[first_idx..last_idx],
             rope,
+            self.format_line_flow,
         )))
     }
 

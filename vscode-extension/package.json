@@ -36,7 +36,25 @@
 				],
 				"configuration": "./bazelrc-language-configuration.json"
 			}
-		]
+		],
+		"configuration": {
+			"title": "Bazelrc",
+			"properties": {
+				"bazelrc.format.line-flow": {
+					"type": "string",
+					"default": "keep",
+					"description": "Should lines be combined / split when formatting bazelrc files?",
+					"enum": ["keep", "line-continuation", "separate-lines", "single-line"],
+					"enumItemLabels": [
+						"Do not reflow lines",
+						"Combine subsequent commands and use `\\` line continuations",
+						"Put each flag on a separate line",
+						"Put all flags on a single line"
+					],
+					"scope": "machine-overridable"
+				}
+			}
+		}
 	},
 	"scripts": {
 		"watch": "node ./build.js --watch",
