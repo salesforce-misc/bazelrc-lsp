@@ -15,6 +15,7 @@ export async function activate (context: ExtensionContext) {
   const command = process.env.SERVER_PATH ?? context.asAbsolutePath('bazelrc-lsp');
   const run: Executable = {
     command,
+    args: ["lsp"],
     options: {
       env: {
         ...process.env,
