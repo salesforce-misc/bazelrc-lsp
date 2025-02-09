@@ -125,6 +125,10 @@ pub fn reflow_lines(lines: &[Line], line_flow: FormatLineFlow) -> Vec<Line> {
                     if l.command.as_ref().map(|c| &c.0) == prev_line.command.as_ref().map(|c| &c.0)
                         && l.config.as_ref().map(|c| &c.0)
                             == prev_line.config.as_ref().map(|c| &c.0)
+                        && l.command
+                            .as_ref()
+                            .map(|c| c.0 != "import" && c.0 != "try-import")
+                            .unwrap_or(true)
                         && l.comment.is_none()
                         && prev_line.comment.is_none()
                     {
@@ -443,5 +447,16 @@ fn test_pretty_print_line_styles() {
         "build:c1 --a=b --c=d\n\
          build:c2 --e=f --g=h\n\
          build:c3 --xyz\n"
+    );
+
+    assert_eq!(
+        pretty_print(
+            "import \"a.bazelrc\"\nimport \"b.bazelrc\"",
+            &flags,
+            FormatLineFlow::SingleLine
+        )
+        .unwrap(),
+        "import a.bazelrc\n\
+         import b.bazelrc\n"
     );
 }
