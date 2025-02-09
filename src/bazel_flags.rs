@@ -211,7 +211,9 @@ pub fn combine_key_value_flags(lines: &mut [crate::parser::Line], bazel_flags: &
                 || -> Option<Spanned<String>> {
                     let flag_name = &flag.name.as_ref()?.0;
                     let info = bazel_flags.get_by_invocation(flag_name)?;
-                    if info.requires_value() {
+                    if flag.value.is_some() {
+                        return flag.value.clone();
+                    } else if info.requires_value() {
                         // Combine with the next flag
                         let next_flag = &l.flags.get(i + 1)?;
                         i += 1;
