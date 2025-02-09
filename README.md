@@ -52,11 +52,11 @@ Contributions are welcome. Feel free to just open a pull request.
 
 ### Backlog
 
-* Bazel version support
+* ✔ Bazel version support
   * ✔ load flags from Bazel's flag dump
   * ✔ pack multiple flag versions & auto-detect version
   * ✔ run `bazel help flags-as-proto` at runtime based on environment variable
-  * expose settings in VS-Code extension
+  * ✔ expose settings in VS-Code extension
 * ✔ Syntax highlighting / semantic tokens
 * Diagnose
   * ✔ unknown flags

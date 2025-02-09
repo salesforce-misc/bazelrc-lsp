@@ -12,12 +12,16 @@ import {
 
 async function startLsp (context: ExtensionContext) {
   const command = process.env.SERVER_PATH ?? context.asAbsolutePath('bazelrc-lsp');
-  const formatConfig = workspace.getConfiguration('bazelrc.format');
-  const lineFlow = formatConfig.get<string>('line-flow') ?? 'keep';
+
+  const config = workspace.getConfiguration('bazelrc');
+  const lineFlow = config.get<string>('format.lineFlow') ?? 'keep';
+  const bazelVersion = config.get<string>('bazelVersion') ?? 'auto-detect';
+  const bazelVersionArgs =
+    bazelVersion !== 'auto-detect' ? ['--bazel-version', bazelVersion] : [];
 
   const run: Executable = {
     command,
-    args: ['--format-lines', lineFlow, 'lsp'],
+    args: bazelVersionArgs.concat(['--format-lines', lineFlow, 'lsp']),
     options: {
       env: {
         ...process.env,
@@ -52,7 +56,8 @@ export async function activate (context: ExtensionContext) {
   client = await startLsp(context);
 
   context.subscriptions.push(workspace.onDidChangeConfiguration(async (e) => {
-    if (e.affectsConfiguration('bazelrc.format.line-flow')) {
+    if (e.affectsConfiguration('bazelrc.bazelVersion') ||
+       e.affectsConfiguration('bazelrc.format.lineFlow')) {
       await client?.stop();
       client = await startLsp(context);
     }

@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::ops::Deref;
 use std::{env, fs, io, process};
 
 use bazelrc_lsp::bazel_flags::{
@@ -67,6 +68,9 @@ enum Commands {
     /// If <file>s are given, reformat the files. If -i is specified,
     /// the files are edited in-place. Otherwise, the result is written to the stdout.
     Format(FormatArgs),
+    /// List supported Bazel versions
+    #[clap(hide = true)]
+    BazelVersions {},
 }
 
 #[derive(Parser)]
@@ -113,6 +117,12 @@ async fn main() {
                 eprintln!("{}", msg);
             }
             handle_format_cmd(&args, &bazel_flags, cli.format_lines.0);
+        }
+        Commands::BazelVersions {} => {
+            println!(
+                "{}",
+                serde_json::to_string(AVAILABLE_BAZEL_VERSIONS.deref()).unwrap()
+            );
         }
     };
 }

@@ -40,7 +40,33 @@
 		"configuration": {
 			"title": "Bazelrc",
 			"properties": {
-				"bazelrc.format.line-flow": {
+				"bazelrc.bazelVersion": {
+					"type": "string",
+					"default": "auto-detect",
+					"description": "The Bazel version to use",
+					"enum": [
+						"auto-detect",
+						"7.0.0",
+						"7.0.1",
+						"7.0.2",
+						"7.1.0",
+						"7.1.1",
+						"7.1.2",
+						"7.2.0",
+						"7.2.1",
+						"7.3.0",
+						"7.3.1",
+						"7.3.2",
+						"7.4.0",
+						"7.4.1",
+						"7.5.0",
+						"8.0.0",
+						"8.0.1",
+						"9.0.0-pre.20250121.1"
+					],
+					"scope": "machine-overridable"
+				},
+				"bazelrc.format.lineFlow": {
 					"type": "string",
 					"default": "keep",
 					"description": "Should lines be combined / split when formatting bazelrc files?",
