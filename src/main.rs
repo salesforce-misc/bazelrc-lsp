@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::ops::Deref;
+use std::path::Path;
 use std::{env, fs, io, process};
 
 use bazelrc_lsp::bazel_flags::{
@@ -10,8 +11,9 @@ use bazelrc_lsp::bazel_version::{
 };
 use bazelrc_lsp::formatting::{pretty_print, FormatLineFlow};
 use bazelrc_lsp::language_server::Backend;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use tower_lsp::{LspService, Server};
+use walkdir::WalkDir;
 
 #[derive(Parser)]
 #[command(version)]
@@ -156,37 +158,36 @@ fn load_bazel_flags(cli: &Cli) -> (BazelFlags, Option<String>) {
 }
 
 fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags, line_flow: FormatLineFlow) {
-    let mut had_errors = false;
+    if args.inplace && args.files.is_empty() {
+        let mut cmd = Cli::command();
+        cmd.error(
+            clap::error::ErrorKind::ArgumentConflict,
+            "If the `-i` flag is specified, input file(s) must be specified as part of the command line invocation",
+        ).exit();
+    }
 
-    let mut do_format = |input: String, file_name: Option<&str>| {
+    let do_format = |input: String, path: Option<&Path>| {
         let result = pretty_print(&input, bazel_flags, line_flow);
         match result {
             Ok(formatted) => {
                 if args.check {
-                    let input_name = file_name
-                        .map(|name| format!("`{}`", name))
+                    let input_name = path
+                        .map(|p| p.to_string_lossy().into_owned())
                         .unwrap_or("<stdin>".to_string());
                     if formatted != input {
                         println!(
                             "{} is NOT correctly formatted and needs reformatting",
                             input_name
                         );
-                        had_errors = true;
+                        return true;
                     } else {
                         println!("{} is already correctly formatted", input_name);
                     }
                 } else if args.inplace {
-                    if let Some(file_name) = file_name {
-                        fs::write(file_name, formatted).expect("Failed to write file");
-                    } else {
-                        eprintln!(
-                            "The `-i` flag does not make sense when not specifying any files"
-                        );
-                        process::exit(1);
-                    }
+                    fs::write(path.unwrap(), formatted).expect("Failed to write file");
                 } else {
-                    if let Some(file_name) = file_name {
-                        println!("--- {} ---", file_name);
+                    if let Some(p) = path {
+                        println!("--- {} ---", p.to_string_lossy());
                     }
                     print!("{}", formatted);
                 }
@@ -195,10 +196,13 @@ fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags, line_flow: For
                 for e in errors {
                     eprintln!("{}", e);
                 }
-                had_errors = true;
+                return true;
             }
         };
+        false
     };
+
+    let mut had_errors = false;
 
     if args.files.is_empty() {
         // Read complete stdin
@@ -206,11 +210,43 @@ fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags, line_flow: For
         io::stdin()
             .read_to_string(&mut input)
             .expect("Failed to read from stdin");
-        do_format(input, None);
+        had_errors |= do_format(input, None);
     } else {
-        for file_name in &args.files {
-            let input = fs::read_to_string(file_name).expect("Failed to read file");
-            do_format(input, Some(file_name));
+        for path_str in &args.files {
+            let path = std::path::Path::new(path_str);
+            if path.is_dir() {
+                let walker = WalkDir::new(path).into_iter().filter_entry(|e| {
+                    let s = e.file_name().to_string_lossy();
+                    // We want to skip all hidden sub-directories, but still visit `.bazelrc` files
+                    // and also work if the user called `bazelrc-lsp format .`
+                    !s.starts_with('.') || s == "." || s == ".." || s == ".bazelrc"
+                });
+                for entry in walker {
+                    match entry {
+                        Ok(entry) => {
+                            let subpath = entry.into_path();
+                            let has_bazelrc_suffix =
+                                subpath.to_string_lossy().ends_with(".bazelrc");
+                            if has_bazelrc_suffix && subpath.is_file() {
+                                let input =
+                                    fs::read_to_string(&subpath).expect("Failed to read file");
+                                had_errors |= do_format(input, Some(subpath.as_path()));
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!(
+                                "Failed to enumerate files in `{}`: {}",
+                                path_str,
+                                err.io_error().unwrap()
+                            );
+                            had_errors = true;
+                        }
+                    }
+                }
+            } else {
+                let input = fs::read_to_string(path).expect("Failed to read file");
+                had_errors |= do_format(input, Some(path));
+            }
         }
     }
 

@@ -99,11 +99,11 @@ Contributions are welcome. Feel free to just open a pull request.
   * ✔ LSP integration
     * ✔ whole document formatting
     * ✔ range formatting
-  * expose formatting through command line to enable integration into CI systems
+  * ✔ expose formatting through command line to enable integration into CI systems
     * ✔ stdin processing
     * ✔ inplace updates for files
     * ✔ `--check`-mode
-    * support enumerating all bazelrc files from a folder
+    * ✔ support enumerating all bazelrc files from a folder
   * write documentation, including explanation of different styles
 * ✔ link file names for `import` & `try-import`
 * Rename functionality for config names
