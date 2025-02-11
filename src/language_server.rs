@@ -12,6 +12,7 @@ use crate::semantic_token::{
 };
 use dashmap::DashMap;
 use ropey::Rope;
+use serde::{Deserialize, Serialize};
 use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -30,12 +31,19 @@ pub struct AnalyzedDocument {
     parser_errors: Vec<chumsky::prelude::Simple<char>>,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    #[serde(default)]
+    pub format_lines: FormatLineFlow,
+}
+
 #[derive(Debug)]
 pub struct Backend {
     pub client: Client,
     pub document_map: DashMap<String, AnalyzedDocument>,
     pub bazel_flags: BazelFlags,
-    pub format_line_flow: FormatLineFlow,
+    pub settings: std::sync::RwLock<Settings>,
     // An optional message which should be displayed to the user on startup
     pub startup_warning: Option<String>,
 }
@@ -151,6 +159,27 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
+    }
+
+    async fn did_change_configuration(&self, mut params: DidChangeConfigurationParams) {
+        let Some(bazelrc_settings) = params
+            .settings
+            .as_object_mut()
+            .and_then(|o| o.remove("bazelrc"))
+        else {
+            return;
+        };
+        match serde_json::from_value::<Settings>(bazelrc_settings) {
+            Ok(new_settings) => *self.settings.write().unwrap() = new_settings,
+            Err(err) => {
+                self.client
+                    .show_message(MessageType::ERROR, format!("Invalid settings: {}", err))
+                    .await;
+                self.client
+                    .log_message(MessageType::ERROR, format!("Invalid settings: {}", err))
+                    .await;
+            }
+        }
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -301,7 +330,7 @@ impl LanguageServer for Backend {
         Ok(Some(get_text_edits_for_lines(
             lines,
             rope,
-            self.format_line_flow,
+            self.settings.read().unwrap().format_lines,
         )))
     }
 
@@ -336,7 +365,7 @@ impl LanguageServer for Backend {
         Ok(Some(get_text_edits_for_lines(
             &all_lines[first_idx..last_idx],
             rope,
-            self.format_line_flow,
+            self.settings.read().unwrap().format_lines,
         )))
     }
 

@@ -1,4 +1,5 @@
 use ropey::Rope;
+use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::TextEdit;
 
 use crate::{
@@ -102,12 +103,14 @@ pub fn format_line(line: &Line, use_line_continuations: bool) -> String {
 }
 
 // Should lines be combined / split when formatting bazelrc files?
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, Default, Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum FormatLineFlow {
     // Do not reflow lines
+    #[default]
     Keep,
     // Combine subsequent commands and use `\\` line continuations
-    LineContinuation,
+    LineContinuations,
     // Put each flag on a separate line
     SeparateLines,
     // Put all flags on a single line
@@ -118,7 +121,7 @@ pub fn reflow_lines(lines: &[Line], line_flow: FormatLineFlow) -> Vec<Line> {
     let mut result1 = Vec::<Line>::with_capacity(lines.len());
     match line_flow {
         FormatLineFlow::Keep => result1.extend(lines.iter().cloned()),
-        FormatLineFlow::SingleLine | FormatLineFlow::LineContinuation => {
+        FormatLineFlow::SingleLine | FormatLineFlow::LineContinuations => {
             for l in lines {
                 // Check if we should merge with the previous line
                 if let Some(prev_line) = result1.last_mut() {
@@ -205,7 +208,7 @@ pub fn get_text_edits_for_lines(
     reflow_lines(lines, line_flow)
         .iter()
         .filter_map(|line| {
-            let use_line_continuations = line_flow == FormatLineFlow::LineContinuation;
+            let use_line_continuations = line_flow == FormatLineFlow::LineContinuations;
             let formatted = format_line(line, use_line_continuations);
             if formatted != rope.slice(line.span.clone()) {
                 Some(TextEdit {
@@ -238,7 +241,7 @@ pub fn pretty_print(
     }
     crate::bazel_flags::combine_key_value_flags(&mut lines, bazel_flags);
     lines = reflow_lines(&lines, line_flow);
-    let use_line_continuations = line_flow == FormatLineFlow::LineContinuation;
+    let use_line_continuations = line_flow == FormatLineFlow::LineContinuations;
     let mut out = String::with_capacity(str.len());
     for line in lines {
         format_line_into(&mut out, &line, use_line_continuations);
@@ -427,7 +430,7 @@ fn test_pretty_print_line_styles() {
         build:c3 --xyz";
 
     assert_eq!(
-        pretty_print(input, &flags, FormatLineFlow::LineContinuation).unwrap(),
+        pretty_print(input, &flags, FormatLineFlow::LineContinuations).unwrap(),
         "build:c1 \\\n    --a=b \\\n    --c=d\n\
          build:c2 \\\n    --e=f \\\n    --g=h\n\
          build:c3 --xyz\n"

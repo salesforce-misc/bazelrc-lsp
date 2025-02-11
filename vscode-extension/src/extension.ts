@@ -14,14 +14,13 @@ async function startLsp (context: ExtensionContext) {
   const command = process.env.SERVER_PATH ?? context.asAbsolutePath('bazelrc-lsp');
 
   const config = workspace.getConfiguration('bazelrc');
-  const lineFlow = config.get<string>('format.lineFlow') ?? 'keep';
-  const bazelVersion = config.get<string>('bazelVersion') ?? 'auto-detect';
+  const bazelVersion = config.get<string>('bazelVersion') ?? 'auto';
   const bazelVersionArgs =
-    bazelVersion !== 'auto-detect' ? ['--bazel-version', bazelVersion] : [];
+    bazelVersion !== 'auto' ? ['--bazel-version', bazelVersion] : [];
 
   const run: Executable = {
     command,
-    args: bazelVersionArgs.concat(['--format-lines', lineFlow, 'lsp']),
+    args: bazelVersionArgs.concat(['lsp']),
     options: {
       env: {
         ...process.env,
@@ -41,7 +40,10 @@ async function startLsp (context: ExtensionContext) {
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for bazelrc documents
-    documentSelector: [{ language: 'bazelrc' }]
+    documentSelector: [{ language: 'bazelrc' }],
+    synchronize: {
+      configurationSection: 'bazelrc'
+    }
   };
 
   // Create the language client and start the client.
@@ -56,8 +58,7 @@ export async function activate (context: ExtensionContext) {
   client = await startLsp(context);
 
   context.subscriptions.push(workspace.onDidChangeConfiguration(async (e) => {
-    if (e.affectsConfiguration('bazelrc.bazelVersion') ||
-       e.affectsConfiguration('bazelrc.format.lineFlow')) {
+    if (e.affectsConfiguration('bazelrc.bazelVersion')) {
       await client?.stop();
       client = await startLsp(context);
     }

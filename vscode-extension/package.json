@@ -42,10 +42,10 @@
 			"properties": {
 				"bazelrc.bazelVersion": {
 					"type": "string",
-					"default": "auto-detect",
+					"default": "auto",
 					"description": "The Bazel version to use",
 					"enum": [
-						"auto-detect",
+						"auto",
 						"7.0.0",
 						"7.0.1",
 						"7.0.2",
@@ -66,11 +66,11 @@
 					],
 					"scope": "machine-overridable"
 				},
-				"bazelrc.format.lineFlow": {
+				"bazelrc.formatLines": {
 					"type": "string",
 					"default": "keep",
 					"description": "Should lines be combined / split when formatting bazelrc files?",
-					"enum": ["keep", "line-continuation", "separate-lines", "single-line"],
+					"enum": ["keep", "lineContinuations", "separateLines", "singleLine"],
 					"enumItemLabels": [
 						"Do not reflow lines",
 						"Combine subsequent commands and use `\\` line continuations",

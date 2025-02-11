@@ -10,7 +10,7 @@ use bazelrc_lsp::bazel_version::{
     determine_bazelisk_version, find_closest_version, AVAILABLE_BAZEL_VERSIONS,
 };
 use bazelrc_lsp::formatting::{pretty_print, FormatLineFlow};
-use bazelrc_lsp::language_server::Backend;
+use bazelrc_lsp::language_server::{Backend, Settings};
 use clap::{CommandFactory, Parser, Subcommand};
 use tower_lsp::{LspService, Server};
 use walkdir::WalkDir;
@@ -39,7 +39,7 @@ impl clap::ValueEnum for FormatLineFlowCli {
     fn value_variants<'a>() -> &'a [Self] {
         &[
             FormatLineFlowCli(FormatLineFlow::Keep),
-            FormatLineFlowCli(FormatLineFlow::LineContinuation),
+            FormatLineFlowCli(FormatLineFlow::LineContinuations),
             FormatLineFlowCli(FormatLineFlow::SeparateLines),
             FormatLineFlowCli(FormatLineFlow::SingleLine),
         ]
@@ -48,8 +48,8 @@ impl clap::ValueEnum for FormatLineFlowCli {
     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
         match self.0 {
             FormatLineFlow::Keep => Some(clap::builder::PossibleValue::new("keep")),
-            FormatLineFlow::LineContinuation => {
-                Some(clap::builder::PossibleValue::new("line-continuation"))
+            FormatLineFlow::LineContinuations => {
+                Some(clap::builder::PossibleValue::new("line-continuations"))
             }
             FormatLineFlow::SeparateLines => {
                 Some(clap::builder::PossibleValue::new("separate-lines"))
@@ -109,7 +109,10 @@ async fn main() {
                 client,
                 document_map: Default::default(),
                 bazel_flags,
-                format_line_flow: cli.format_lines.0,
+                settings: Settings {
+                    format_lines: cli.format_lines.0,
+                }
+                .into(),
                 startup_warning: version_message,
             });
             Server::new(stdin, stdout, socket).serve(service).await;

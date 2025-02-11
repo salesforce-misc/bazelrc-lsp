@@ -39,7 +39,7 @@ async function build() {
         .contributes.configuration.properties["bazelrc.bazelVersion"].enum;
     const rustVersionsJson = (await execFile(bazelrcExec, ["bazel-versions"])).stdout;
     const rustVersions = JSON.parse(rustVersionsJson);
-    const expectedVersions = ["auto-detect"].concat(rustVersions)
+    const expectedVersions = ["auto"].concat(rustVersions)
     if (!areStringArraysEqual(versions, expectedVersions)) {
         console.error("Error: Mismatch between package.json versions and Rust versions");
         console.error("package.json versions:", versions);
