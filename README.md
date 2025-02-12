@@ -2,46 +2,42 @@
 
 Code intelligence for `.bazelrc` config files.
 
-## Installation
+## Installation & Configuration
 
 The language server from this repository can be used in a wide range editors (neovim, emacs, IntelliJ, ...).
 
 For **Visual Studio Code**, we offer a pre-packaged Visual Studio Code plugin:
 
-1. Download the correct `*.vsix` package for your operating system from the [latest release](https://github.com/salesforce-misc/bazelrc-lsp/releases/)
+1. Download the correct `*.vsix` package for your operating system for the [latest release](https://github.com/salesforce-misc/bazelrc-lsp/releases/)
 2. Inside Visual Studio, press `Cmd` + `Shift` + `P` to open the command picker
 3. Choose the "Extension: Install from VSIX..." command
-4. In the file picker, choose the downloaded `.vsix` file
+4. Choose the downloaded `.vsix` file in the file picker
 
 I will leave it as an exercise to the reader to figure out how exactly
-to configure the language server for other editors. (Pull requests welcome).
+to configure the language server for other editors. The `bazelrc-lsp help`
+command might be useful to get an overview of the available arguments.
 
-## Bazel version
+### Configuring your Bazel version
 
-`bazelrc-lsp` comes packaged with the list of supported Bazel flags for a large range of Bazel versions.
-The exact Bazel version is selected the same way as in Bazelisk:
-If a `USE_BAZEL_VERSION` environment variable is present, then this environment variable is authorative.
-Otherwise, the Bazel version will be determined from the `.bazeliskrc` or the `.bazelversion` file.
+`bazelrc-lsp` comes packaged with documentation and metadata about the supported Bazel
+flags for a large range of Bazel versions. By default, the Bazel version is auto-detected
+using [Bazelisk's algorithm](https://github.com/bazelbuild/bazelisk/tree/master?tab=readme-ov-file#how-does-bazelisk-know-which-bazel-version-to-run), 
+i.e. based on the `USE_BAZEL_VERSION` environment variable, the `.bazeliskrc` and the
+`.bazelversion` file.
 
-Alternatively, the language server can also invoke Bazel to request an up-to-date list of supported flags.
-To do so, point the environment variable `BAZELRC_LSP_RUN_BAZEL_PATH` to your Bazel binary or use the
-`--bazel-path` command line parameter.
+In case auto-detection does not work for your particular use case, you can also specify a version
+explicitly via the VS-Code settings.
 
-## Current State & Roadmap
-
-The extension is complete enough for my personal needs and hopefully useful to you, too.
-
-Long-term, I am considering to integrate this functionality into the official [VSCode Bazel extension](https://github.com/bazelbuild/vscode-bazel). This is also why this extension is not published to the VS Code Marketplace as a standalone extension.
-
-However, currently this extension still has a couple rough edges. Before integrating this language server with the VSCode Bazel extension, and thereby exposing it to a larger user base, those sharp edges first need to be smoothed.
-
-Pull Requests are welcome! Further down in this README you can find a backlog of various ideas.
-In case you want to discuss any of those topics (or a topic of your own), please feel free to reach out via a Github issue.
+Alternatively, the language server can also invoke Bazel to request the list of supported flags.
+To do so, point the environment variable `BAZELRC_LSP_RUN_BAZEL_PATH` to your Bazel binary. This
+is particularly useful for development versions and custom forks of Bazel.
 
 ## Development
 
 The source code for this extension lives at https://github.com/salesforce-misc/bazelrc-lsp.
 Contributions are welcome. Feel free to just open a pull request.
+Further down in this README you can also find a backlog of various ideas, in case you need some inspiration.
+In case you want to discuss any of those topics (or a topic of your own), please feel free to reach out via a Github issue.
 
 ### Building from source
 
@@ -50,7 +46,13 @@ Contributions are welcome. Feel free to just open a pull request.
 3. `pnpm package`
 4. Install the "hyper-ir-lsp-*.vsix" in VS Code
 
-### Backlog
+### Current State & Backlog
+
+The extension is complete enough for my personal needs and hopefully useful to you, too.
+
+Long-term, I am considering to integrate this functionality into the official [VSCode Bazel extension](https://github.com/bazelbuild/vscode-bazel). This is also why this extension is not published to the VS Code Marketplace as a standalone extension.
+
+Backlog items:
 
 * ✔ Bazel version support
   * ✔ load flags from Bazel's flag dump
