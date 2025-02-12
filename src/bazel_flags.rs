@@ -227,8 +227,11 @@ pub fn combine_key_value_flags(lines: &mut [crate::parser::Line], bazel_flags: &
             new_flags.push(
                 || -> Option<Spanned<String>> {
                     let flag_name = &flag.name.as_ref()?.0;
-                    let (_, info) = bazel_flags.get_by_invocation(flag_name)?;
-                    if flag.value.is_some() {
+                    let (lookup_type, info) = bazel_flags.get_by_invocation(flag_name)?;
+                    if flag.value.is_some() || lookup_type == FlagLookupType::Abbreviation {
+                        // If we already have an associated value or if the flag was referred to
+                        // using it's abbreviated name, we don't combine the flag.
+                        // Note that the `-c=opt` would be invalid, only `-c opt` is valid.
                         return flag.value.clone();
                     } else if info.requires_value() {
                         // Combine with the next flag

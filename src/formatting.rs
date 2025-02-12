@@ -351,6 +351,12 @@ fn test_pretty_print_combined_flags() {
         "build --keep_going --foobar\n"
     );
 
+    // Leaves abbreviated flag names alone. `-cdbg` would not be valid.
+    assert_eq!(
+        pretty_print("build -c dbg", &flags, lf).unwrap(),
+        "build -c dbg\n"
+    );
+
     // Handles empty parameters correctly
     assert_eq!(
         pretty_print("build --x \"\"", &flags, lf).unwrap(),
