@@ -35,15 +35,24 @@ async function build() {
     }
 
     // Check if `./package.json` is up-to-date
-    const versions = JSON.parse(await fs.readFile("./package.json"))
+    const packageJson = JSON.parse(await fs.readFile("./package.json"));
+    console.log((await execFile(bazelrcExec, ["--version"])).stdout.trim());
+    const bazelrclspVersion = (await execFile(bazelrcExec, ["--version"])).stdout.trim().match("bazelrc-lsp (\\d+.\\d+.\\d+)")[1];
+    if (bazelrclspVersion != packageJson.version) {
+        console.error("Error: Mismatch between package.json version and bazelrc version");
+        console.error("package.json versions:", packageJson.version);
+        console.error("bazelrc-lsp versions:", bazelrclspVersion);
+        throw new Error("Version mismatch detected.");
+    }
+    const versions = packageJson
         .contributes.configuration.properties["bazelrc.bazelVersion"].enum;
     const rustVersionsJson = (await execFile(bazelrcExec, ["bazel-versions"])).stdout;
     const rustVersions = JSON.parse(rustVersionsJson);
     const expectedVersions = ["auto"].concat(rustVersions)
     if (!areStringArraysEqual(versions, expectedVersions)) {
-        console.error("Error: Mismatch between package.json versions and Rust versions");
+        console.error("Error: Mismatch between supported Bazel version");
         console.error("package.json versions:", versions);
-        console.error("Rust versions:", rustVersions);
+        console.error("bazelrc-lsp versions:", rustVersions);
         throw new Error("Version mismatch detected.");
     }
 
