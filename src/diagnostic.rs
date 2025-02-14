@@ -6,10 +6,10 @@ use ropey::Rope;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
 
 use crate::{
-    bazel_flags::{BazelFlags, FlagLookupType},
+    bazel_flags::{combine_key_value_flags, BazelFlags, FlagLookupType},
     file_utils::resolve_bazelrc_path,
     lsp_utils::range_to_lsp,
-    parser::Line,
+    parser::{parse_from_str, Line, ParserResult},
 };
 
 pub fn diagnostics_from_parser<'a>(
@@ -246,24 +246,36 @@ pub fn diagnostics_from_rcconfig(
     diagnostics
 }
 
-#[cfg(test)]
-fn diagnose_string(str: &str) -> Vec<String> {
-    use crate::bazel_flags::combine_key_value_flags;
-    use crate::bazel_flags::load_packaged_bazel_flags;
-    use crate::parser::parse_from_str;
-    use crate::parser::ParserResult;
-
+pub fn diagnostics_from_string(
+    str: &str,
+    bazel_flags: &BazelFlags,
+    file_path: Option<&Path>,
+) -> Vec<Diagnostic> {
     let rope = Rope::from_str(str);
     let ParserResult {
         tokens: _,
         mut lines,
         errors,
     } = parse_from_str(str);
-    assert!(errors.is_empty());
+    combine_key_value_flags(&mut lines, bazel_flags);
+
+    let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
+    diagnostics.extend(diagnostics_from_parser(&rope, &errors));
+    diagnostics.extend(diagnostics_from_rcconfig(
+        &rope,
+        &lines,
+        bazel_flags,
+        file_path,
+    ));
+    diagnostics
+}
+
+#[cfg(test)]
+fn test_diagnose_string(str: &str) -> Vec<String> {
+    use crate::bazel_flags::load_packaged_bazel_flags;
 
     let bazel_flags = load_packaged_bazel_flags("8.0.0");
-    combine_key_value_flags(&mut lines, &bazel_flags);
-    return diagnostics_from_rcconfig(&rope, &lines, &bazel_flags, None)
+    return diagnostics_from_string(str, &bazel_flags, None)
         .iter_mut()
         .map(|d| std::mem::take(&mut d.message))
         .collect::<Vec<_>>();
@@ -273,22 +285,22 @@ fn diagnose_string(str: &str) -> Vec<String> {
 fn test_diagnose_commands() {
     // Nothing wrong with this `build` command
     assert_eq!(
-        diagnose_string("build --remote_upload_local_results=false"),
+        test_diagnose_string("build --remote_upload_local_results=false"),
         Vec::<&str>::new()
     );
     // The command should be named `build`, not `built`
     assert_eq!(
-        diagnose_string("built --remote_upload_local_results=false"),
+        test_diagnose_string("built --remote_upload_local_results=false"),
         vec!["Unknown command \"built\""]
     );
     // Completely missing command
     assert_eq!(
-        diagnose_string("--remote_upload_local_results=false"),
+        test_diagnose_string("--remote_upload_local_results=false"),
         vec!["Missing command"]
     );
     // Completely missing command
     assert_eq!(
-        diagnose_string(":opt --remote_upload_local_results=false"),
+        test_diagnose_string(":opt --remote_upload_local_results=false"),
         vec!["Missing command"]
     );
 }
@@ -297,58 +309,58 @@ fn test_diagnose_commands() {
 fn test_diagnose_config_names() {
     // Diagnose empty config names
     assert_eq!(
-        diagnose_string("build: --disk_cache="),
+        test_diagnose_string("build: --disk_cache="),
         vec!["Empty configuration names are pointless"]
     );
 
     // Diagnose config names on commands which don't support configs
     assert_eq!(
-        diagnose_string("startup:opt --digest_function=blake3"),
+        test_diagnose_string("startup:opt --digest_function=blake3"),
         vec!["Configuration names not supported on \"startup\" commands"]
     );
     assert_eq!(
-        diagnose_string("import:opt \"x.bazelrc\""),
+        test_diagnose_string("import:opt \"x.bazelrc\""),
         vec!["Configuration names not supported on \"import\" commands"]
     );
     assert_eq!(
-        diagnose_string("try-import:opt \"x.bazelrc\""),
+        test_diagnose_string("try-import:opt \"x.bazelrc\""),
         vec!["Configuration names not supported on \"try-import\" commands"]
     );
 
     // Diagnose overly complicated config names
     let config_name_diag = "Overly complicated config name. Config names should consist only of lower-case ASCII characters.";
     assert_eq!(
-        diagnose_string("common:Uncached --disk_cache="),
+        test_diagnose_string("common:Uncached --disk_cache="),
         vec![config_name_diag]
     );
     assert_eq!(
-        diagnose_string("common:-opt --disk_cache="),
+        test_diagnose_string("common:-opt --disk_cache="),
         vec![config_name_diag]
     );
     assert_eq!(
-        diagnose_string("common:opt- --disk_cache="),
+        test_diagnose_string("common:opt- --disk_cache="),
         vec![config_name_diag]
     );
     assert_eq!(
-        diagnose_string("common:2opt --disk_cache="),
+        test_diagnose_string("common:2opt --disk_cache="),
         vec![config_name_diag]
     );
     assert_eq!(
-        diagnose_string("common:opt2 --disk_cache="),
+        test_diagnose_string("common:opt2 --disk_cache="),
         Vec::<String>::new()
     );
     assert_eq!(
-        diagnose_string("common:opt-2 --disk_cache="),
+        test_diagnose_string("common:opt-2 --disk_cache="),
         Vec::<String>::new()
     );
     assert_eq!(
-        diagnose_string("common:opt--2 --disk_cache="),
+        test_diagnose_string("common:opt--2 --disk_cache="),
         vec![config_name_diag]
     );
     // The Bazel documentation recommends to prefix all user-specific settings with an `_`.
     // As such, config names prefixed that way shouldn't be diagnosed as errors.
     assert_eq!(
-        diagnose_string("common:_personal --disk_cache="),
+        test_diagnose_string("common:_personal --disk_cache="),
         Vec::<String>::new()
     );
 }
@@ -357,33 +369,33 @@ fn test_diagnose_config_names() {
 fn test_diagnose_flags() {
     // Diagnose unknown flags
     assert_eq!(
-        diagnose_string("build --unknown_flag"),
+        test_diagnose_string("build --unknown_flag"),
         vec!["Unknown flag \"--unknown_flag\""]
     );
     // Diagnose flags which are applied for the wrong command
     assert_eq!(
-        diagnose_string("startup --disk_cache="),
+        test_diagnose_string("startup --disk_cache="),
         vec!["The flag \"--disk_cache\" is not supported for \"startup\". It is supported for [\"analyze-profile\", \"aquery\", \"build\", \"canonicalize-flags\", \"clean\", \"config\", \"coverage\", \"cquery\", \"dump\", \"fetch\", \"help\", \"info\", \"license\", \"mobile-install\", \"mod\", \"print_action\", \"query\", \"run\", \"shutdown\", \"sync\", \"test\", \"vendor\", \"version\"] commands, though."]
     );
     // Diagnose deprecated flags
     assert_eq!(
-        diagnose_string("common --legacy_whole_archive"),
+        test_diagnose_string("common --legacy_whole_archive"),
         vec!["The flag \"--legacy_whole_archive\" is deprecated."]
     );
     // Diagnose no_op flags
     assert_eq!(
-        diagnose_string("common --incompatible_override_toolchain_transition"),
+        test_diagnose_string("common --incompatible_override_toolchain_transition"),
         vec!["The flag \"--incompatible_override_toolchain_transition\" is a no-op."]
     );
     // Diagnose abbreviated flag names
     assert_eq!(
-        diagnose_string("build -k"),
+        test_diagnose_string("build -k"),
         vec!["Use the full name \"keep_going\" instead of its abbreviation."]
     );
 
     // Don't diagnose custom flags
     assert_eq!(
-        diagnose_string(
+        test_diagnose_string(
             "build --//my/package:setting=foobar
             build --no//my/package:bool_flag
             build --@dependency:my/package:bool_flag
@@ -399,28 +411,31 @@ fn test_diagnose_combined_flags() {
     // following `--std=c++20`. `--std=c++20` should not raise
     // an error about an unrecognized Bazel flag.
     assert_eq!(
-        diagnose_string("build --copt --std=c++20"),
+        test_diagnose_string("build --copt --std=c++20"),
         Vec::<&str>::new()
     );
     // On the other hand, `--keep_going` only takes an optional value.
     // Hence, the `true` is interpreted as a separate flag, which then triggers
     // an error.
     assert_eq!(
-        diagnose_string("build --keep_going --foobar"),
+        test_diagnose_string("build --keep_going --foobar"),
         vec!["Unknown flag \"--foobar\""]
     );
 }
 
 #[test]
 fn test_diagnose_import() {
-    assert_eq!(diagnose_string("import"), vec!["Missing file path"]);
-    assert_eq!(diagnose_string("try-import"), vec!["Missing file path"]);
+    assert_eq!(test_diagnose_string("import"), vec!["Missing file path"]);
     assert_eq!(
-        diagnose_string("import --a"),
+        test_diagnose_string("try-import"),
+        vec!["Missing file path"]
+    );
+    assert_eq!(
+        test_diagnose_string("import --a"),
         vec!["`import` expects a file name, not a flag name"]
     );
     assert_eq!(
-        diagnose_string("import a b"),
+        test_diagnose_string("import a b"),
         vec!["`import` expects a single file name, but received multiple arguments"]
     );
 }

@@ -9,6 +9,7 @@ use bazelrc_lsp::bazel_flags::{
 use bazelrc_lsp::bazel_version::{
     determine_bazelisk_version, find_closest_version, AVAILABLE_BAZEL_VERSIONS,
 };
+use bazelrc_lsp::diagnostic::diagnostics_from_string;
 use bazelrc_lsp::formatting::{pretty_print, FormatLineFlow};
 use bazelrc_lsp::language_server::{Backend, Settings};
 use clap::{CommandFactory, Parser, Subcommand};
@@ -70,21 +71,11 @@ enum Commands {
     /// If <file>s are given, reformat the files. If -i is specified,
     /// the files are edited in-place. Otherwise, the result is written to the stdout.
     Format(FormatArgs),
+    /// Check your bazelrc files for mistakes
+    Lint(LintArgs),
     /// List supported Bazel versions
     #[clap(hide = true)]
     BazelVersions {},
-}
-
-#[derive(Parser)]
-struct FormatArgs {
-    /// File(s) to format
-    files: Vec<String>,
-    /// Inplace edit <file>s
-    #[arg(short = 'i', long, group = "fmt-action")]
-    inplace: bool,
-    /// Only check if the given file(s) are formatted correctly
-    #[arg(long, group = "fmt-action")]
-    check: bool,
 }
 
 #[tokio::main]
@@ -123,6 +114,9 @@ async fn main() {
             }
             handle_format_cmd(&args, &bazel_flags, cli.format_lines.0);
         }
+        Commands::Lint(args) => {
+            handle_lint_cmd(&args, &bazel_flags);
+        }
         Commands::BazelVersions {} => {
             println!(
                 "{}",
@@ -160,6 +154,102 @@ fn load_bazel_flags(cli: &Cli) -> (BazelFlags, Option<String>) {
     }
 }
 
+fn for_each_input_file<CB>(files: &[String], handle_file: CB) -> bool
+where
+    CB: Fn(String, Option<&Path>) -> bool,
+{
+    let mut had_errors = false;
+
+    if files.is_empty() {
+        // Read complete stdin
+        let mut input = String::new();
+        io::stdin()
+            .read_to_string(&mut input)
+            .expect("Failed to read from stdin");
+        had_errors |= handle_file(input, None);
+    } else {
+        for path_str in files {
+            let path = std::path::Path::new(path_str);
+            if path.is_dir() {
+                let walker = WalkDir::new(path).into_iter().filter_entry(|e| {
+                    let s = e.file_name().to_string_lossy();
+                    // We want to skip all hidden sub-directories, but still visit `.bazelrc` files
+                    // and also work if the user called `bazelrc-lsp format .`
+                    !s.starts_with('.') || s == "." || s == ".." || s == ".bazelrc"
+                });
+                for entry in walker {
+                    match entry {
+                        Ok(entry) => {
+                            let subpath = entry.into_path();
+                            let has_bazelrc_suffix =
+                                subpath.to_string_lossy().ends_with(".bazelrc");
+                            if has_bazelrc_suffix && subpath.is_file() {
+                                let input =
+                                    fs::read_to_string(&subpath).expect("Failed to read file");
+                                had_errors |= handle_file(input, Some(subpath.as_path()));
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!(
+                                "Failed to enumerate files in `{}`: {}",
+                                path_str,
+                                err.io_error().unwrap()
+                            );
+                            had_errors = true;
+                        }
+                    }
+                }
+            } else {
+                let input = fs::read_to_string(path).expect("Failed to read file");
+                had_errors |= handle_file(input, Some(path));
+            }
+        }
+    }
+
+    had_errors
+}
+
+#[derive(Parser)]
+struct LintArgs {
+    /// File(s) to format
+    files: Vec<String>,
+    /// Suppress output and only indicate errors through the exit code
+    #[arg(long, group = "fmt-action")]
+    quiet: bool,
+}
+
+fn handle_lint_cmd(args: &LintArgs, bazel_flags: &BazelFlags) {
+    let had_errors = for_each_input_file(&args.files, |input: String, path: Option<&Path>| {
+        let diagnostics = diagnostics_from_string(&input, bazel_flags, path);
+        if !args.quiet {
+            for d in &diagnostics {
+                // TODO: improve printing, either using ariadne or codespan-reporting
+                println!(
+                    "{}: {}",
+                    path.and_then(Path::to_str).unwrap_or("<stdin>"),
+                    d.message
+                );
+            }
+        }
+        !diagnostics.is_empty()
+    });
+    if had_errors {
+        process::exit(1);
+    }
+}
+
+#[derive(Parser)]
+struct FormatArgs {
+    /// File(s) to format
+    files: Vec<String>,
+    /// Inplace edit <file>s
+    #[arg(short = 'i', long, group = "fmt-action")]
+    inplace: bool,
+    /// Only check if the given file(s) are formatted correctly
+    #[arg(long, group = "fmt-action")]
+    check: bool,
+}
+
 fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags, line_flow: FormatLineFlow) {
     if args.inplace && args.files.is_empty() {
         let mut cmd = Cli::command();
@@ -169,7 +259,7 @@ fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags, line_flow: For
         ).exit();
     }
 
-    let do_format = |input: String, path: Option<&Path>| {
+    let had_errors = for_each_input_file(&args.files, |input: String, path: Option<&Path>| {
         let result = pretty_print(&input, bazel_flags, line_flow);
         match result {
             Ok(formatted) => {
@@ -203,56 +293,7 @@ fn handle_format_cmd(args: &FormatArgs, bazel_flags: &BazelFlags, line_flow: For
             }
         };
         false
-    };
-
-    let mut had_errors = false;
-
-    if args.files.is_empty() {
-        // Read complete stdin
-        let mut input = String::new();
-        io::stdin()
-            .read_to_string(&mut input)
-            .expect("Failed to read from stdin");
-        had_errors |= do_format(input, None);
-    } else {
-        for path_str in &args.files {
-            let path = std::path::Path::new(path_str);
-            if path.is_dir() {
-                let walker = WalkDir::new(path).into_iter().filter_entry(|e| {
-                    let s = e.file_name().to_string_lossy();
-                    // We want to skip all hidden sub-directories, but still visit `.bazelrc` files
-                    // and also work if the user called `bazelrc-lsp format .`
-                    !s.starts_with('.') || s == "." || s == ".." || s == ".bazelrc"
-                });
-                for entry in walker {
-                    match entry {
-                        Ok(entry) => {
-                            let subpath = entry.into_path();
-                            let has_bazelrc_suffix =
-                                subpath.to_string_lossy().ends_with(".bazelrc");
-                            if has_bazelrc_suffix && subpath.is_file() {
-                                let input =
-                                    fs::read_to_string(&subpath).expect("Failed to read file");
-                                had_errors |= do_format(input, Some(subpath.as_path()));
-                            }
-                        }
-                        Err(err) => {
-                            eprintln!(
-                                "Failed to enumerate files in `{}`: {}",
-                                path_str,
-                                err.io_error().unwrap()
-                            );
-                            had_errors = true;
-                        }
-                    }
-                }
-            } else {
-                let input = fs::read_to_string(path).expect("Failed to read file");
-                had_errors |= do_format(input, Some(path));
-            }
-        }
-    }
-
+    });
     if had_errors {
         process::exit(1);
     }
