@@ -20,6 +20,7 @@ fn dump_flags(cache_dir: &Path, version: &str) -> Vec<u8> {
         };
         let result = bazelisk_cmd
             .env("USE_BAZEL_VERSION", version)
+            .arg("--ignore_all_rc_files")
             .arg("help")
             .arg("flags-as-proto")
             .output()
@@ -134,10 +135,12 @@ fn main() -> Result<()> {
     let (mut deprecated_watchfs, mut non_deprecated_watchfs): (Vec<_>, Vec<_>) = watchfs_flags
         .into_iter()
         .partition(|f| f.metadata_tags.contains(&"DEPRECATED".to_string()));
-    for flag in &mut deprecated_watchfs {
-        non_deprecated_watchfs[0]
-            .bazel_versions
-            .append(&mut flag.bazel_versions);
+    if !non_deprecated_watchfs.is_empty() {
+        for flag in &mut deprecated_watchfs {
+            non_deprecated_watchfs[0]
+                .bazel_versions
+                .append(&mut flag.bazel_versions);
+        }
     }
     flags_by_name.insert("watchfs".to_string(), non_deprecated_watchfs);
 
