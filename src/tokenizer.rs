@@ -36,15 +36,16 @@ impl fmt::Display for Token {
 // > build:opt --x=y
 //
 // See rc_file.cc and util/strings.cc from the Bazel source code
-pub fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
+pub fn tokenizer<'src>(
+) -> impl Parser<'src, &'src str, Vec<Spanned<Token>>, extra::Err<Rich<'src, char>>> {
     // The token separators
     let specialchars = " \t\r\n\"\'#";
 
     // All characters except for separators and `\` characters are part of tokens
-    let raw_token_char = filter(|c| *c != '\\' && !specialchars.contains(*c));
+    let raw_token_char = any().filter(|c| *c != '\\' && !specialchars.contains(*c));
 
     // Characters can be escaped with a `\` (except for newlines; those are treated in escaped_newline)
-    let escaped_char = just('\\').ignore_then(filter(|c| *c != '\n' && *c != '\r'));
+    let escaped_char = just('\\').ignore_then(any().filter(|c| *c != '\n' && *c != '\r'));
 
     // A newline. Either a Windows or a Unix newline
     let newline_raw = just('\n').or(just('\r').ignore_then(just('\n')));
@@ -62,16 +63,26 @@ pub fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char
         .or(escaped_newline_raw.to(Option::<char>::None));
 
     // A token consists of multiple token_chars
-    let unquoted_token_raw = token_char.repeated().at_least(1);
+    let unquoted_token_raw = token_char.repeated().at_least(1).collect::<Vec<_>>();
 
     // Quoted tokens with `"`
     let dquoted_token_raw = just('"')
-        .ignore_then(token_char.or(one_of(" \t\'#").map(Option::Some)).repeated())
+        .ignore_then(
+            token_char
+                .or(one_of(" \t\'#").map(Option::Some))
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
         .then_ignore(just('"'));
 
     // Quoted tokens with `'`
     let squoted_token_raw = just('\'')
-        .ignore_then(token_char.or(one_of(" \t\"#").map(Option::Some)).repeated())
+        .ignore_then(
+            token_char
+                .or(one_of(" \t\"#").map(Option::Some))
+                .repeated()
+                .collect(),
+        )
         .then_ignore(just('\''));
 
     // Quoted tokens. Either with `"` or with `'`
@@ -82,20 +93,34 @@ pub fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char
         .or(quoted_token_raw)
         .repeated()
         .at_least(1)
-        .flatten()
-        .map(|v| Token::Token(v.iter().filter_map(|c| *c).collect::<String>()));
+        .collect::<Vec<_>>()
+        .map(|v| Token::Token(v.iter().flatten().filter_map(|c| *c).collect::<String>()));
 
     // Comments go until the end of line.
     // However a newline might be escaped using `\`
+    let non_newline = any().and_is(one_of("\n\r").not());
     let comment = just('#')
-        .ignore_then(escaped_newline_raw.or(one_of("\n\r").not()).repeated())
-        .collect::<String>()
+        .ignore_then(
+            escaped_newline_raw
+                .or(non_newline)
+                .repeated()
+                .collect::<String>(),
+        )
         .map(Token::Comment);
 
     // Detect `command` and `command:config` in the beginnig of a line
     let token = choice((comment, escaped_newline, newline, mixed_token))
-        .recover_with(skip_then_retry_until([]))
-        .map_with_span(|tok, span| (tok, span));
+        .recover_with(skip_then_retry_until(any().ignored(), any().ignored()))
+        .map_with(|tok, e| {
+            let span: SimpleSpan = e.span();
+            (
+                tok,
+                Span {
+                    start: span.start,
+                    end: span.end,
+                },
+            )
+        });
 
     token
         .padded_by(one_of(" \t").repeated())
@@ -107,13 +132,13 @@ pub fn tokenizer() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char
 #[test]
 fn test_newlines() {
     // Our tokenizer accepts empty strings
-    assert_eq!(tokenizer().parse(""), Ok(Vec::from([])));
+    assert_eq!(tokenizer().parse("").into_result(), Ok(Vec::from([])));
 
     // `\n` and `\r\n``separate lines.
     // Lines can have leading and trailing whitespace.
     // We also preserve empty lines
     assert_eq!(
-        tokenizer().parse("cmd\n\r\n\ncmd -x \n"),
+        tokenizer().parse("cmd\n\r\n\ncmd -x \n").into_result(),
         Ok(Vec::from([
             (Token::Token("cmd".to_string()), 0..3),
             (Token::Newline, 3..4),
@@ -127,7 +152,7 @@ fn test_newlines() {
 
     // Newlines can be escaped
     assert_eq!(
-        tokenizer().parse("cmd \\\n -x\n"),
+        tokenizer().parse("cmd \\\n -x\n").into_result(),
         Ok(Vec::from([
             (Token::Token("cmd".to_string()), 0..3),
             (Token::EscapedNewline, 4..6),
@@ -139,8 +164,8 @@ fn test_newlines() {
 
 #[test]
 fn test_tokens() {
-    let flags_only = |e: &str| {
-        tokenizer().parse(e).map(|v| {
+    let flags_only = |e: &'static str| {
+        tokenizer().parse(e).into_result().map(|v| {
             v.iter()
                 // Remove positions
                 .map(|v2| v2.0.clone())
@@ -204,7 +229,7 @@ fn test_tokens() {
     // A token can be continued on the next line using a `\`
     assert_single_flag!("a\\\nbc", "abc".to_string());
     // A quoted token does not continue across lines
-    assert!(tokenizer().parse("'my\ntoken'").is_err());
+    assert!(tokenizer().parse("'my\ntoken'").has_errors());
     // But a quoted token can contain escaped newlines
     assert_single_flag!("'my\\\ntoken'", "mytoken".to_string());
 
@@ -218,7 +243,9 @@ fn test_tokens() {
 fn test_comments() {
     // Comments
     assert_eq!(
-        tokenizer().parse(" # my comment\n#2nd comment"),
+        tokenizer()
+            .parse(" # my comment\n#2nd comment")
+            .into_result(),
         Ok(vec!(
             (Token::Comment(" my comment".to_string()), 1..13),
             (Token::Newline, 13..14),
@@ -227,16 +254,29 @@ fn test_comments() {
     );
     // Comments can be continued across lines with `\`
     assert_eq!(
-        tokenizer().parse(" # my\\\nco\\mment"),
+        tokenizer().parse(" # my\\\nco\\mment").into_result(),
         Ok(vec!((Token::Comment(" my\nco\\mment".to_string()), 1..15)))
     );
 
     // Comments can even start in the middle of a token, without a whitespace
     assert_eq!(
-        tokenizer().parse("flag#comment"),
+        tokenizer().parse("flag#comment").into_result(),
         Ok(vec!(
             (Token::Token("flag".to_string()), 0..4),
             (Token::Comment("comment".to_string()), 4..12)
+        ))
+    );
+}
+
+#[test]
+fn test_unicode() {
+    // Unicode characters are allowed in tokens.
+    // They are counted in bytes, not characters inside the spans
+    assert_eq!(
+        tokenizer().parse("build:🔥 --❄️=🔥").into_result(),
+        Ok(vec!(
+            (Token::Token("build:🔥".to_string()), 0..10),
+            (Token::Token("--❄️=🔥".to_string()), 11..24)
         ))
     );
 }

@@ -28,7 +28,7 @@ pub struct AnalyzedDocument {
     rope: Rope,
     semantic_tokens: Vec<RCSemanticToken>,
     indexed_lines: IndexedLines,
-    parser_errors: Vec<chumsky::prelude::Simple<char>>,
+    has_parser_errors: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -78,9 +78,9 @@ impl Backend {
             params.uri.to_string(),
             AnalyzedDocument {
                 rope,
-                parser_errors: errors,
                 semantic_tokens,
                 indexed_lines,
+                has_parser_errors: !errors.is_empty(),
             },
         );
 
@@ -319,7 +319,7 @@ impl LanguageServer for Backend {
             .ok_or(Error::invalid_params("Unknown document!"))?;
         let rope = &doc.rope;
 
-        if !doc.parser_errors.is_empty() {
+        if doc.has_parser_errors {
             return Err(Error::invalid_params(
                 "Formatting can only be applied if there are no parsing errors",
             ));
@@ -346,7 +346,7 @@ impl LanguageServer for Backend {
             .ok_or(Error::invalid_params("Unknown document!"))?;
         let rope = &doc.rope;
 
-        if !doc.parser_errors.is_empty() {
+        if doc.has_parser_errors {
             return Err(Error::invalid_params(
                 "Formatting can only be applied if there are no parsing errors",
             ));

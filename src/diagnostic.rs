@@ -1,10 +1,12 @@
-use std::path::Path;
+use std::fmt::Write as _;
+use std::{ops::Deref, path::Path};
 
-use chumsky::error::Simple;
+use chumsky::error::Rich;
 use regex::Regex;
 use ropey::Rope;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
 
+use crate::tokenizer::Span;
 use crate::{
     bazel_flags::{combine_key_value_flags, BazelFlags, FlagLookupType},
     file_utils::resolve_bazelrc_path,
@@ -14,40 +16,45 @@ use crate::{
 
 pub fn diagnostics_from_parser<'a>(
     rope: &'a Rope,
-    errors: &'a [Simple<char>],
+    errors: &'a [Rich<'a, char>],
 ) -> impl Iterator<Item = Diagnostic> + 'a {
     errors.iter().filter_map(move |item| {
-        let (message, span) = match item.reason() {
-            chumsky::error::SimpleReason::Unclosed { span, delimiter } => {
-                (format!("Unclosed delimiter {}", delimiter), span.clone())
-            }
-            chumsky::error::SimpleReason::Unexpected => (
-                format!(
-                    "{}, expected {}",
-                    if item.found().is_some() {
-                        "Unexpected token in input"
-                    } else {
-                        "Unexpected end of input"
-                    },
-                    if item.expected().len() == 0 {
-                        "something else".to_string()
-                    } else {
-                        item.expected()
-                            .map(|expected| match expected {
-                                Some(expected) => expected.to_string(),
-                                None => "end of input".to_string(),
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ")
+        let (message, err_span) = match item.reason() {
+            chumsky::error::RichReason::ExpectedFound { expected, found } => {
+                let mut s = String::new();
+                if let Some(found) = found {
+                    write!(s, "Found {}", found.deref()).unwrap();
+                } else {
+                    write!(&mut s, "Unexpected end of input").unwrap();
+                }
+                write!(&mut s, ", expected ").unwrap();
+                match &expected[..] {
+                    [] => {
+                        write!(s, "something else").unwrap();
                     }
-                ),
-                item.span(),
-            ),
-            chumsky::error::SimpleReason::Custom(msg) => (msg.to_string(), item.span()),
+                    [expected] => {
+                        write!(s, "{}", expected).unwrap();
+                    }
+                    _ => {
+                        for expected in &expected[..expected.len() - 1] {
+                            write!(s, "{}", expected).unwrap();
+                            write!(s, ", ").unwrap();
+                        }
+                        write!(s, "or ").unwrap();
+                        write!(s, "{}", expected.last().unwrap()).unwrap();
+                    }
+                }
+                (s, item.span())
+            }
+            chumsky::error::RichReason::Custom(msg) => (msg.to_string(), item.span()),
         };
 
+        let span = &Span {
+            start: err_span.start,
+            end: err_span.end,
+        };
         || -> Option<Diagnostic> {
-            Some(Diagnostic::new_simple(range_to_lsp(rope, &span)?, message))
+            Some(Diagnostic::new_simple(range_to_lsp(rope, span)?, message))
         }()
     })
 }

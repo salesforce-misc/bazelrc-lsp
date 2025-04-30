@@ -1,4 +1,4 @@
-use chumsky::{error::Simple, Parser};
+use chumsky::{error::Rich, Parser};
 
 use crate::tokenizer::{tokenizer, Span, Spanned, Token};
 
@@ -18,10 +18,10 @@ pub struct Line {
     pub span: Span,
 }
 
-pub struct ParserResult {
+pub struct ParserResult<'a> {
     pub tokens: Vec<Spanned<Token>>,
     pub lines: Vec<Line>,
-    pub errors: Vec<Simple<char>>,
+    pub errors: Vec<Rich<'a, char>>,
 }
 
 // Splits a token at a given separator, keeping the position tracking
@@ -110,7 +110,7 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
         };
     }
     if let Some(mut l) = current_line.take() {
-        let implicit_final_newline = orig.chars().count();
+        let implicit_final_newline = orig.len();
         l.span = current_line_start..implicit_final_newline;
         result_lines.push(l);
     }
@@ -121,8 +121,9 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
 // Parser for bazelrc files.
 pub fn parse_from_str(str: &str) -> ParserResult {
     // Tokenize
-    let (tokens_opt, errors) = tokenizer().parse_recovery(str);
-    let tokens = tokens_opt.unwrap_or(Vec::new());
+    let tokenizer_result = tokenizer().parse(str);
+    let tokens = tokenizer_result.output().unwrap_or(&Vec::new()).clone();
+    let errors = tokenizer_result.into_errors();
 
     // Parse
     let lines = parse(&tokens, str);
@@ -357,5 +358,23 @@ fn test_empty_lines() {
                 ..Default::default()
             },
         )
+    );
+}
+
+#[test]
+fn test_unicode() {
+    // Check that we keep also keep a representation for empty lines
+    assert_eq!(
+        parse_from_str("build:🔥 --❄️=🔥").lines,
+        vec!(Line {
+            command: Some(("build".to_string(), 0..5)),
+            config: Some(("🔥".to_string(), 5..10)),
+            flags: vec!(Flag {
+                name: Some(("--❄️".to_string(), 11..19)),
+                value: Some(("🔥".to_string(), 19..24))
+            }),
+            comment: None,
+            span: 0..24
+        })
     );
 }
