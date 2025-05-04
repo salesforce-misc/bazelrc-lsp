@@ -10,13 +10,14 @@ use crate::tokenizer::Span;
 use crate::{
     bazel_flags::{combine_key_value_flags, BazelFlags, FlagLookupType},
     file_utils::resolve_bazelrc_path,
-    lsp_utils::range_to_lsp,
+    lsp_utils::{encode_lsp_range, LspPositionEncoding},
     parser::{parse_from_str, Line, ParserResult},
 };
 
 pub fn diagnostics_from_parser<'a>(
     rope: &'a Rope,
     errors: &'a [Rich<'a, char>],
+    encoding: LspPositionEncoding,
 ) -> impl Iterator<Item = Diagnostic> + 'a {
     errors.iter().filter_map(move |item| {
         let (message, err_span) = match item.reason() {
@@ -54,14 +55,22 @@ pub fn diagnostics_from_parser<'a>(
             end: err_span.end,
         };
         || -> Option<Diagnostic> {
-            Some(Diagnostic::new_simple(range_to_lsp(rope, span)?, message))
+            Some(Diagnostic::new_simple(
+                encode_lsp_range(rope, span, encoding)?,
+                message,
+            ))
         }()
     })
 }
 
 const SKIPPED_PREFIXES: [&str; 4] = ["--//", "--no//", "--@", "--no@"];
 
-fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> Vec<Diagnostic> {
+fn diagnostics_for_flags(
+    rope: &Rope,
+    line: &Line,
+    bazel_flags: &BazelFlags,
+    encoding: LspPositionEncoding,
+) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
     let command = &line.command.as_ref().unwrap().0;
     for flag in &line.flags {
@@ -77,14 +86,14 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                 // Diagnose flags used on the wrong command
                 if !flag_description.supports_command(command) {
                     diagnostics.push(Diagnostic::new_simple(
-                        range_to_lsp(rope, &name.1).unwrap(),
+                        encode_lsp_range(rope, &name.1, encoding).unwrap(),
                         format!("The flag {:?} is not supported for {:?}. It is supported for {:?} commands, though.", name.0, command, flag_description.commands),
                     ))
                 }
                 // Diagnose deprecated options
                 if flag_description.is_deprecated() {
                     diagnostics.push(Diagnostic {
-                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        range: encode_lsp_range(rope, &name.1, encoding).unwrap(),
                         message: format!("The flag {:?} is deprecated.", name.0),
                         severity: Some(DiagnosticSeverity::WARNING),
                         tags: Some(vec![DiagnosticTag::DEPRECATED]),
@@ -92,14 +101,14 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                     });
                 } else if flag_description.is_noop() {
                     diagnostics.push(Diagnostic {
-                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        range: encode_lsp_range(rope, &name.1, encoding).unwrap(),
                         message: format!("The flag {:?} is a no-op.", name.0),
                         severity: Some(DiagnosticSeverity::WARNING),
                         ..Default::default()
                     });
                 } else if lookup_type == FlagLookupType::OldName {
                     diagnostics.push(Diagnostic {
-                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        range: encode_lsp_range(rope, &name.1, encoding).unwrap(),
                         message: format!(
                             "The flag {:?} was renamed to \"--{}\".",
                             name.0, flag_description.name
@@ -110,7 +119,7 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
                     });
                 } else if lookup_type == FlagLookupType::Abbreviation {
                     diagnostics.push(Diagnostic {
-                        range: range_to_lsp(rope, &name.1).unwrap(),
+                        range: encode_lsp_range(rope, &name.1, encoding).unwrap(),
                         message: format!(
                             "Use the full name {:?} instead of its abbreviation.",
                             flag_description.name
@@ -122,7 +131,7 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
             } else {
                 // Diagnose unknown flags
                 diagnostics.push(Diagnostic::new_simple(
-                    range_to_lsp(rope, &name.1).unwrap(),
+                    encode_lsp_range(rope, &name.1, encoding).unwrap(),
                     format!("Unknown flag {:?}", name.0),
                 ))
             }
@@ -131,17 +140,22 @@ fn diagnostics_for_flags(rope: &Rope, line: &Line, bazel_flags: &BazelFlags) -> 
     diagnostics
 }
 
-fn diagnostics_for_imports(rope: &Rope, line: &Line, base_path: Option<&Path>) -> Vec<Diagnostic> {
+fn diagnostics_for_imports(
+    rope: &Rope,
+    line: &Line,
+    base_path: Option<&Path>,
+    encoding: LspPositionEncoding,
+) -> Vec<Diagnostic> {
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
     let command = line.command.as_ref().unwrap();
     if line.flags.is_empty() {
         diagnostics.push(Diagnostic::new_simple(
-            range_to_lsp(rope, &command.1).unwrap(),
+            encode_lsp_range(rope, &command.1, encoding).unwrap(),
             "Missing file path".to_string(),
         ))
     } else if line.flags.len() > 1 {
         diagnostics.push(Diagnostic::new_simple(
-            range_to_lsp(rope, &command.1).unwrap(),
+            encode_lsp_range(rope, &command.1, encoding).unwrap(),
             format!(
                 "`{}` expects a single file name, but received multiple arguments",
                 command.0
@@ -151,7 +165,7 @@ fn diagnostics_for_imports(rope: &Rope, line: &Line, base_path: Option<&Path>) -
         let flag = &line.flags[0];
         if flag.name.is_some() {
             diagnostics.push(Diagnostic::new_simple(
-                range_to_lsp(rope, &command.1).unwrap(),
+                encode_lsp_range(rope, &command.1, encoding).unwrap(),
                 format!("`{}` expects a file name, not a flag name", command.0),
             ))
         }
@@ -166,14 +180,14 @@ fn diagnostics_for_imports(rope: &Rope, line: &Line, base_path: Option<&Path>) -
                 if let Some(path) = opt_path {
                     if !path.exists() {
                         diagnostics.push(Diagnostic {
-                            range: range_to_lsp(rope, &value.1).unwrap(),
+                            range: encode_lsp_range(rope, &value.1, encoding).unwrap(),
                             message: "Imported file does not exist".to_string(),
                             severity: Some(severity),
                             ..Default::default()
                         })
                     } else if !path.is_file() {
                         diagnostics.push(Diagnostic {
-                            range: range_to_lsp(rope, &value.1).unwrap(),
+                            range: encode_lsp_range(rope, &value.1, encoding).unwrap(),
                             message: "Imported path exists, but is not a file".to_string(),
                             severity: Some(severity),
                             ..Default::default()
@@ -181,7 +195,7 @@ fn diagnostics_for_imports(rope: &Rope, line: &Line, base_path: Option<&Path>) -
                     }
                 } else {
                     diagnostics.push(Diagnostic {
-                        range: range_to_lsp(rope, &value.1).unwrap(),
+                        range: encode_lsp_range(rope, &value.1, encoding).unwrap(),
                         message: "Unable to resolve file name".to_string(),
                         severity: Some(severity),
                         ..Default::default()
@@ -198,6 +212,7 @@ pub fn diagnostics_from_rcconfig(
     lines: &[Line],
     bazel_flags: &BazelFlags,
     file_path: Option<&Path>,
+    encoding: LspPositionEncoding,
 ) -> Vec<Diagnostic> {
     let config_regex = Regex::new(r"^[a-z_][a-z0-9]*(?:[-_][a-z0-9]+)*$").unwrap();
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
@@ -206,18 +221,18 @@ pub fn diagnostics_from_rcconfig(
         // Command-specific diagnostics
         if let Some((command, span)) = &l.command {
             if command == "import" || command == "try-import" {
-                diagnostics.extend(diagnostics_for_imports(rope, l, file_path))
+                diagnostics.extend(diagnostics_for_imports(rope, l, file_path, encoding))
             } else if bazel_flags.flags_by_commands.contains_key(command) {
-                diagnostics.extend(diagnostics_for_flags(rope, l, bazel_flags))
+                diagnostics.extend(diagnostics_for_flags(rope, l, bazel_flags, encoding))
             } else {
                 diagnostics.push(Diagnostic::new_simple(
-                    range_to_lsp(rope, span).unwrap(),
+                    encode_lsp_range(rope, span, encoding).unwrap(),
                     format!("Unknown command {:?}", command),
                 ));
             }
         } else if !l.flags.is_empty() {
             diagnostics.push(Diagnostic::new_simple(
-                range_to_lsp(rope, &l.span).unwrap(),
+                encode_lsp_range(rope, &l.span, encoding).unwrap(),
                 "Missing command".to_string(),
             ));
         }
@@ -227,20 +242,20 @@ pub fn diagnostics_from_rcconfig(
             if config_name.is_empty() {
                 // Empty config names make no sense
                 diagnostics.push(Diagnostic::new_simple(
-                    range_to_lsp(rope, span).unwrap(),
+                    encode_lsp_range(rope, span, encoding).unwrap(),
                     "Empty configuration names are pointless".to_string(),
                 ));
             } else if !config_regex.is_match(config_name) {
                 // Overly complex config names
                 diagnostics.push(Diagnostic::new_simple(
-                    range_to_lsp(rope, span).unwrap(),
+                    encode_lsp_range(rope, span, encoding).unwrap(),
                     "Overly complicated config name. Config names should consist only of lower-case ASCII characters.".to_string(),
                 ));
             }
             if let Some((command, _)) = &l.command {
                 if ["startup", "import", "try-import"].contains(&command.as_str()) {
                     diagnostics.push(Diagnostic::new_simple(
-                        range_to_lsp(rope, span).unwrap(),
+                        encode_lsp_range(rope, span, encoding).unwrap(),
                         format!(
                             "Configuration names not supported on {:?} commands",
                             command
@@ -257,6 +272,7 @@ pub fn diagnostics_from_string(
     str: &str,
     bazel_flags: &BazelFlags,
     file_path: Option<&Path>,
+    encoding: LspPositionEncoding,
 ) -> Vec<Diagnostic> {
     let rope = Rope::from_str(str);
     let ParserResult {
@@ -267,12 +283,13 @@ pub fn diagnostics_from_string(
     combine_key_value_flags(&mut lines, bazel_flags);
 
     let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
-    diagnostics.extend(diagnostics_from_parser(&rope, &errors));
+    diagnostics.extend(diagnostics_from_parser(&rope, &errors, encoding));
     diagnostics.extend(diagnostics_from_rcconfig(
         &rope,
         &lines,
         bazel_flags,
         file_path,
+        encoding,
     ));
     diagnostics
 }
@@ -282,7 +299,7 @@ fn test_diagnose_string(str: &str) -> Vec<String> {
     use crate::bazel_flags::load_packaged_bazel_flags;
 
     let bazel_flags = load_packaged_bazel_flags("8.0.0");
-    return diagnostics_from_string(str, &bazel_flags, None)
+    return diagnostics_from_string(str, &bazel_flags, None, LspPositionEncoding::UTF32)
         .iter_mut()
         .map(|d| std::mem::take(&mut d.message))
         .collect::<Vec<_>>();

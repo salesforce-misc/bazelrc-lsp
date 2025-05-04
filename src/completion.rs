@@ -8,7 +8,7 @@ use crate::{
     bazel_flags::{BazelFlags, COMMAND_DOCS},
     bazel_flags_proto::FlagInfo,
     line_index::{IndexEntryKind, IndexedLines},
-    lsp_utils::range_to_lsp,
+    lsp_utils::{encode_lsp_range, LspPositionEncoding},
     tokenizer::Span,
 };
 
@@ -88,6 +88,7 @@ pub fn get_completion_items(
     rope: &Rope,
     index: &IndexedLines,
     pos: usize,
+    encoding: LspPositionEncoding,
 ) -> Vec<CompletionItem> {
     // For completion, the indices point between characters and not
     // at characters. We are generally interested in the token so far
@@ -104,7 +105,7 @@ pub fn get_completion_items(
                     complete_bazel_flag(
                         bazel_flags,
                         &cmd.0,
-                        range_to_lsp(rope, &entry.span).unwrap(),
+                        encode_lsp_range(rope, &entry.span, encoding).unwrap(),
                     )
                 } else {
                     // A flag should never be on a line without a command
@@ -121,12 +122,13 @@ pub fn get_completion_items(
             complete_bazel_flag(
                 bazel_flags,
                 &cmd.0,
-                range_to_lsp(
+                encode_lsp_range(
                     rope,
                     &Span {
                         start: pos,
                         end: pos,
                     },
+                    encoding,
                 )
                 .unwrap(),
             )

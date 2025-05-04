@@ -52,4 +52,4 @@ build:myconfig \
   --disk_cache=
 
 # Unicode flags
-build:❄️🔥 --❄️=🔥 --🔥=❄️ --❄️🔥
+build:❄️🔥 --❄️=a --🔥=❄️ --❄️🔥

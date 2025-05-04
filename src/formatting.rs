@@ -4,7 +4,7 @@ use tower_lsp::lsp_types::TextEdit;
 
 use crate::{
     bazel_flags::BazelFlags,
-    lsp_utils::range_to_lsp,
+    lsp_utils::{encode_lsp_range, LspPositionEncoding},
     parser::{parse_from_str, Line, ParserResult},
     tokenizer::Span,
 };
@@ -204,6 +204,7 @@ pub fn get_text_edits_for_lines(
     lines: &[Line],
     rope: &Rope,
     line_flow: FormatLineFlow,
+    encoding: LspPositionEncoding,
 ) -> Vec<TextEdit> {
     reflow_lines(lines, line_flow)
         .iter()
@@ -212,7 +213,7 @@ pub fn get_text_edits_for_lines(
             let formatted = format_line(line, use_line_continuations);
             if formatted != rope.slice(line.span.clone()) {
                 Some(TextEdit {
-                    range: range_to_lsp(rope, &line.span)?,
+                    range: encode_lsp_range(rope, &line.span, encoding)?,
                     new_text: formatted,
                 })
             } else {

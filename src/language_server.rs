@@ -5,7 +5,7 @@ use crate::diagnostic::{diagnostics_from_parser, diagnostics_from_rcconfig};
 use crate::file_utils::resolve_bazelrc_path;
 use crate::formatting::{get_text_edits_for_lines, FormatLineFlow};
 use crate::line_index::{IndexEntry, IndexEntryKind, IndexedLines};
-use crate::lsp_utils::{lsp_pos_to_offset, range_to_lsp};
+use crate::lsp_utils::{decode_lsp_pos, encode_lsp_range, LspPositionEncoding};
 use crate::parser::{parse_from_str, Line, ParserResult};
 use crate::semantic_token::{
     convert_to_lsp_tokens, semantic_tokens_from_lines, RCSemanticToken, LEGEND_TYPE,
@@ -43,6 +43,7 @@ pub struct Backend {
     pub client: Client,
     pub document_map: DashMap<String, AnalyzedDocument>,
     pub bazel_flags: BazelFlags,
+    pub position_encoding: std::sync::RwLock<LspPositionEncoding>,
     pub settings: std::sync::RwLock<Settings>,
     // An optional message which should be displayed to the user on startup
     pub startup_warning: Option<String>,
@@ -65,13 +66,15 @@ impl Backend {
         let semantic_tokens = semantic_tokens_from_lines(&lines);
         let indexed_lines = IndexedLines::from_lines(lines);
 
+        let position_encoding = *self.position_encoding.read().unwrap();
         let mut diagnostics: Vec<Diagnostic> = Vec::<Diagnostic>::new();
-        diagnostics.extend(diagnostics_from_parser(&rope, &errors));
+        diagnostics.extend(diagnostics_from_parser(&rope, &errors, position_encoding));
         diagnostics.extend(diagnostics_from_rcconfig(
             &rope,
             &indexed_lines.lines,
             &self.bazel_flags,
             file_path,
+            position_encoding,
         ));
 
         self.document_map.insert(
@@ -92,7 +95,31 @@ impl Backend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, init_params: InitializeParams) -> Result<InitializeResult> {
+        // Choose the position encoding format.
+        let supported_encodings = init_params
+            .capabilities
+            .general
+            .unwrap_or_default()
+            .position_encodings
+            .unwrap_or_default();
+        let selected_encoding = supported_encodings
+            .iter()
+            .filter_map(|e| {
+                if *e == PositionEncodingKind::UTF8 {
+                    Some(LspPositionEncoding::UTF8)
+                } else if *e == PositionEncodingKind::UTF16 {
+                    Some(LspPositionEncoding::UTF16)
+                } else if *e == PositionEncodingKind::UTF32 {
+                    Some(LspPositionEncoding::UTF32)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap_or(LspPositionEncoding::UTF16);
+        *self.position_encoding.write().unwrap() = selected_encoding;
+
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "bazelrc Language Server".to_string(),
@@ -222,20 +249,26 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let position_encoding = *self.position_encoding.read().unwrap();
         let text_document_position = params.text_document_position;
         let uri = text_document_position.text_document.uri.to_string();
         let doc = self
             .document_map
             .get(&uri)
             .ok_or(Error::invalid_params("Unknown document!"))?;
-        let pos = lsp_pos_to_offset(&doc.rope, &text_document_position.position)
-            .ok_or(Error::invalid_params("Position out of range"))?;
+        let pos = decode_lsp_pos(
+            &doc.rope,
+            &text_document_position.position,
+            position_encoding,
+        )
+        .ok_or(Error::invalid_params("Position out of range"))?;
 
         Ok(Some(CompletionResponse::Array(get_completion_items(
             &self.bazel_flags,
             &doc.rope,
             &doc.indexed_lines,
             pos,
+            position_encoding,
         ))))
     }
 
@@ -243,6 +276,7 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
+        let position_encoding = *self.position_encoding.read().unwrap();
         let uri = params.text_document_position_params.text_document.uri;
         let file_path = uri
             .to_file_path()
@@ -252,8 +286,12 @@ impl LanguageServer for Backend {
             .document_map
             .get(&uri.to_string())
             .ok_or(Error::invalid_params("Unknown document!"))?;
-        let pos = lsp_pos_to_offset(&doc.rope, &params.text_document_position_params.position)
-            .ok_or(Error::invalid_params("Position out of range"))?;
+        let pos = decode_lsp_pos(
+            &doc.rope,
+            &params.text_document_position_params.position,
+            position_encoding,
+        )
+        .ok_or(Error::invalid_params("Position out of range"))?;
         let IndexEntry { kind, line_nr, .. } =
             doc.indexed_lines.find_symbol_at_position(pos).unwrap();
         let definitions = get_definitions(&file_path, kind, &doc.indexed_lines.lines[*line_nr]);
@@ -262,14 +300,19 @@ impl LanguageServer for Backend {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         // Find the right document and offset
+        let position_encoding = *self.position_encoding.read().unwrap();
         let text_document_position = params.text_document_position_params;
         let uri = text_document_position.text_document.uri.to_string();
         let doc = self
             .document_map
             .get(&uri)
             .ok_or(Error::invalid_params("Unknown document!"))?;
-        let pos = lsp_pos_to_offset(&doc.rope, &text_document_position.position)
-            .ok_or(Error::invalid_params("Position out of range"))?;
+        let pos = decode_lsp_pos(
+            &doc.rope,
+            &text_document_position.position,
+            position_encoding,
+        )
+        .ok_or(Error::invalid_params("Position out of range"))?;
 
         Ok(|| -> Option<Hover> {
             // Find the symbol at the position and provide the hover documentation
@@ -290,7 +333,7 @@ impl LanguageServer for Backend {
                                 HoverContents::Scalar(MarkedString::String(docs.to_string()));
                             Hover {
                                 contents,
-                                range: range_to_lsp(&doc.rope, span),
+                                range: encode_lsp_range(&doc.rope, span, position_encoding),
                             }
                         })
                 }
@@ -303,7 +346,7 @@ impl LanguageServer for Backend {
                     let contents = HoverContents::Scalar(MarkedString::String(content));
                     Some(Hover {
                         contents,
-                        range: range_to_lsp(&doc.rope, span),
+                        range: encode_lsp_range(&doc.rope, span, position_encoding),
                     })
                 }
             }
@@ -312,6 +355,7 @@ impl LanguageServer for Backend {
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         // Find the right document
+        let position_encoding = *self.position_encoding.read().unwrap();
         let uri = params.text_document.uri.to_string();
         let doc = self
             .document_map
@@ -331,6 +375,7 @@ impl LanguageServer for Backend {
             lines,
             rope,
             self.settings.read().unwrap().format_lines,
+            position_encoding,
         )))
     }
 
@@ -339,6 +384,7 @@ impl LanguageServer for Backend {
         params: DocumentRangeFormattingParams,
     ) -> Result<Option<Vec<TextEdit>>> {
         // Find the right document
+        let position_encoding = *self.position_encoding.read().unwrap();
         let uri = params.text_document.uri.to_string();
         let doc = self
             .document_map
@@ -354,9 +400,9 @@ impl LanguageServer for Backend {
 
         // Format the line range
         let all_lines = &doc.indexed_lines.lines;
-        let start_offset = lsp_pos_to_offset(rope, &params.range.start)
+        let start_offset = decode_lsp_pos(rope, &params.range.start, position_encoding)
             .ok_or(Error::invalid_params("Position out of range!"))?;
-        let end_offset = lsp_pos_to_offset(rope, &params.range.end)
+        let end_offset = decode_lsp_pos(rope, &params.range.end, position_encoding)
             .ok_or(Error::invalid_params("Position out of range!"))?;
         // XXX not correct, yet
         let first_idx = all_lines.partition_point(|l: &Line| l.span.start < start_offset);
@@ -366,11 +412,13 @@ impl LanguageServer for Backend {
             &all_lines[first_idx..last_idx],
             rope,
             self.settings.read().unwrap().format_lines,
+            position_encoding,
         )))
     }
 
     async fn document_link(&self, params: DocumentLinkParams) -> Result<Option<Vec<DocumentLink>>> {
         // Find the right document
+        let position_encoding = *self.position_encoding.read().unwrap();
         let uri = params.text_document.uri.to_string();
         let doc = self
             .document_map
@@ -405,7 +453,7 @@ impl LanguageServer for Backend {
                 let path = resolve_bazelrc_path(&file_path, &value.0)?;
                 let url = Url::from_file_path(path).ok()?;
                 Some(DocumentLink {
-                    range: range_to_lsp(rope, &value.1)?,
+                    range: encode_lsp_range(rope, &value.1, position_encoding)?,
                     target: Some(url),
                     tooltip: None,
                     data: None,

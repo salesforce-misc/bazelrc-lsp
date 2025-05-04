@@ -12,6 +12,7 @@ use bazelrc_lsp::bazel_version::{
 use bazelrc_lsp::diagnostic::diagnostics_from_string;
 use bazelrc_lsp::formatting::{pretty_print, FormatLineFlow};
 use bazelrc_lsp::language_server::{Backend, Settings};
+use bazelrc_lsp::lsp_utils::LspPositionEncoding;
 use clap::{CommandFactory, Parser, Subcommand};
 use tower_lsp::{LspService, Server};
 use walkdir::WalkDir;
@@ -100,6 +101,7 @@ async fn main() {
                 client,
                 document_map: Default::default(),
                 bazel_flags,
+                position_encoding: LspPositionEncoding::UTF16.into(),
                 settings: Settings {
                     format_lines: cli.format_lines.0,
                 }
@@ -220,7 +222,8 @@ struct LintArgs {
 
 fn handle_lint_cmd(args: &LintArgs, bazel_flags: &BazelFlags) {
     let had_errors = for_each_input_file(&args.files, |input: String, path: Option<&Path>| {
-        let diagnostics = diagnostics_from_string(&input, bazel_flags, path);
+        let diagnostics =
+            diagnostics_from_string(&input, bazel_flags, path, LspPositionEncoding::UTF32);
         if !args.quiet {
             for d in &diagnostics {
                 // TODO: improve printing, either using ariadne or codespan-reporting
