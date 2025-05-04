@@ -50,3 +50,6 @@ build:myconfig \
   --remote_cache \
   path_to_remote_cache \
   --disk_cache=
+
+# Unicode flags
+build:❄️🔥 --❄️=🔥 --🔥=❄️ --❄️🔥
