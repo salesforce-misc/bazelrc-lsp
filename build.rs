@@ -108,7 +108,7 @@ fn main() -> Result<()> {
         "8.1.1",
         "8.2.0",
         "8.2.1",
-        "9.0.0-pre.20250317.2",
+        "9.0.0-pre.20250610.2",
     ];
 
     let cache_dir = env::current_dir().unwrap().join("bazel-flags-cache");
