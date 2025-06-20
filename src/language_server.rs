@@ -123,7 +123,7 @@ impl LanguageServer for Backend {
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: "bazelrc Language Server".to_string(),
-                version: Some("1".to_string()),
+                version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
             offset_encoding: None,
             capabilities: ServerCapabilities {
