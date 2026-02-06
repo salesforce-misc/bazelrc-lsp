@@ -24,7 +24,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-    runs-on: ${{ matrix.os }}-latest
+    # Pin Linux to ubuntu-22.04 so binaries link against GLIBC 2.35 and run on Debian 12 and Ubuntu 22.04
+    runs-on: ${{ matrix.os == 'ubuntu' && 'ubuntu-22.04' || format('{0}-latest', matrix.os) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -87,7 +88,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-    runs-on: ${{ matrix.os }}-latest
+    # Pin Linux to ubuntu-22.04 so binaries link against GLIBC 2.35 and run on Debian 12 and Ubuntu 22.04
+    runs-on: ${{ matrix.os == 'ubuntu' && 'ubuntu-22.04' || format('{0}-latest', matrix.os) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
