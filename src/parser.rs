@@ -119,7 +119,7 @@ fn parse(tokens: &[(Token, Span)], orig: &str) -> Vec<Line> {
 }
 
 // Parser for bazelrc files.
-pub fn parse_from_str(str: &str) -> ParserResult {
+pub fn parse_from_str(str: &str) -> ParserResult<'_> {
     // Tokenize
     let tokenizer_result = tokenizer().parse(str);
     let tokens = tokenizer_result.output().unwrap_or(&Vec::new()).clone();
