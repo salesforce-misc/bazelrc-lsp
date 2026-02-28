@@ -64,7 +64,7 @@ Backlog items:
   * ✔ unknown flags
   * ✔ allow custom setting flags (`--//my/package:setting` and `--no//my/package:setting`)
   * ✔ abbreviated flag names; prefer non-abbreviated flags
-  * when using an old, deprecated name (blocked on [up-stream Bazel change](https://github.com/bazelbuild/bazel/pull/25169))
+  * ✔ when using an old, deprecated name
   * ✔ diagnose deprecated flags
   * ✔ diagnose missing `import`ed files
   * ✔ configs on `startup`, `import`, `try-import`
@@ -79,7 +79,7 @@ Backlog items:
   * ✔ Show documentation of flags on hover
   * ✔ Correctly escape `<>` in Markdown (e.g. problematic in the documentation for `--config`)
   * Link to flag documentation in hovers
-  * Expose default value, value description (blocked on [up-stream Bazel change](https://github.com/bazelbuild/bazel/pull/25169))
+  * ✔ Expose default value, value description
   * ✔ Show documentation for commands on hover
 * Autocomplete
   * ✔ auto complete command names
